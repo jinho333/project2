@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<!--
+  공급 예측 페이지  (URL: /forecast , 컨트롤러: DashboardController.forecast)
+  - 탭 2개: [예측] 3·6개월 예측 차트/표, [시뮬레이션] 기온·인구를 바꿔보는 가상 계산
+  - 탭 전환은 forecast.js 가 hidden 속성을 켜고 꺼서 처리 (두 화면 모두 이 파일 안에 있음)
+-->
+<head th:replace="~{fragments/layout :: head('공급 예측')}"></head>
+<body>
+<div class="app">
+    <aside th:replace="~{fragments/layout :: sidebar('forecast')}"></aside>
+    <main class="main">
+        <header th:replace="~{fragments/layout :: topbar('공급 예측')}"></header>
+        <div class="page">
+            <div class="page-head">
+                <h1>공급 예측</h1>
+                <p>기온·인구 전망에 따른 3·6개월 공급량 예측과 시나리오 시뮬레이션.</p>
+            </div>
+
+            <!-- 왼쪽 지도 / 오른쪽 내용. 시뮬레이션 탭에서는 지도를 숨기고 1단으로 바뀜 -->
+            <div class="grid-map" id="fcLayout">
+                <section class="card map-card" id="mapCard">
+                    <div class="card-head"><div><div class="eyebrow">Map</div><h3 class="card-title">지역 선택</h3><div class="card-sub">타일을 클릭해 지역을 바꿉니다</div></div></div>
+                    <div class="card-body"><div id="map"></div></div>
+                </section>
+
+                <div class="stack">
+                    <!-- 지역 정보 + 지역 드롭다운(시뮬레이션 탭에서만 보임) + 예측/시뮬레이션 탭 -->
+                    <div class="region-head">
+                        <div id="regionInfo"></div>
+                        <div class="row">
+                            <select id="regionSelect" class="select" hidden></select>
+                            <div id="viewTabs" class="tabs"></div>
+                        </div>
+                    </div>
+
+                    <!-- 예측 -->
+                    <div id="forecastView" class="stack">
+                        <!-- KPI 카드 3개 (#fcKpis) -->
+                        <div class="kpi-grid" id="fcKpis"></div>
+                        <!-- 예측 선 차트(#fcChart): 실적 12개월 + 예측. 오른쪽 위에 신뢰구간 스위치, 3·6개월 탭 -->
+                        <section class="card">
+                            <div class="card-head">
+                                <div><div class="eyebrow">Forecast</div><h3 class="card-title" id="fcTitle">공급량 예측</h3><div class="card-sub">실적 12개월 + 예측 · 단위: 백만㎥</div></div>
+                                <div class="card-actions">
+                                    <label class="switch"><input type="checkbox" id="bandToggle" checked><span class="switch-track"></span>신뢰구간</label>
+                                    <div id="horizonTabs" class="tabs"></div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart" style="height:300px"><canvas id="fcChart"></canvas></div>
+                                <div class="legend mt-12">
+                                    <span><i class="ln" style="border-color:var(--viz-actual)"></i>실적</span>
+                                    <span><i class="ln ln--dash" style="border-color:var(--viz-forecast)"></i>예측</span>
+                                    <span><i class="sw sw--band" style="background:var(--viz-band)"></i>신뢰구간 (±MAPE)</span>
+                                </div>
+                            </div>
+                        </section>
+                        <!-- 월별 예측 표 (#fcTable 에 행을 채움) -->
+                        <section class="card">
+                            <div class="card-head"><div><div class="eyebrow">Detail</div><h3 class="card-title">월별 예측 상세</h3></div></div>
+                            <div class="card-body card-body--flush">
+                                <table class="table">
+                                    <thead><tr><th>월</th><th>예상 평균기온</th><th>예측 공급량</th><th>하한</th><th>상한</th><th>계절</th></tr></thead>
+                                    <tbody id="fcTable"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- 시뮬레이션 -->
+                    <div id="simView" class="grid-sim" hidden>
+                        <!-- 입력 카드: 기온 범위 슬라이더(최저/최고) + 인구 변화율 슬라이더 -->
+                        <section class="card card--doc">
+                            <div class="card-head"><div><div class="eyebrow">Scenario</div><h3 class="card-title">시나리오 입력</h3></div></div>
+                            <div class="card-body stack-lg">
+                                <div class="field">
+                                    <div class="field-head"><span>1년 기온 범위</span><b><span class="c-winter" id="tempLoLabel"></span> ~ <span class="c-summer" id="tempHiLabel"></span></b></div>
+                                    <!-- 슬라이더 2개를 겹쳐서 '범위 선택' 슬라이더처럼 보이게 만든 구조 -->
+                                    <div class="range2">
+                                        <div class="range-track"><div class="range-fill range-fill--temp" id="tempFill"></div></div>
+                                        <input type="range" id="tempLo" min="-20" max="40" step="0.5" aria-label="최저 기온">
+                                        <input type="range" id="tempHi" min="-20" max="40" step="0.5" aria-label="최고 기온">
+                                    </div>
+                                    <div class="marks"><span>-20°C</span><span>0°C</span><span>20°C</span><span>40°C</span></div>
+                                </div>
+                                <!-- 입력한 기온 범위로 만든 12개월 기온 미리보기 막대 -->
+                                <div class="temp-preview" id="tempPreview"></div>
+                                <div class="field">
+                                    <div class="field-head"><span>인구 변화율</span><b id="popLabel">0%</b></div>
+                                    <div class="range2 range2--single">
+                                        <div class="range-track"><div class="range-zero"></div><div class="range-fill range-fill--pop" id="popFill"></div></div>
+                                        <input type="range" id="popSlider" min="-10" max="10" step="0.5" value="0" aria-label="인구 변화율">
+                                    </div>
+                                    <div class="marks"><span>-10%</span><span>0%</span><span>+10%</span></div>
+                                </div>
+                                <!-- 실행 버튼은 입력이 바뀌었을 때만 활성화됨 -->
+                                <div class="row">
+                                    <button class="btn btn--primary btn--block" type="button" id="runSim"><i data-lucide="play"></i>시뮬레이션 실행</button>
+                                    <button class="btn btn--secondary" type="button" id="resetSim"><i data-lucide="rotate-ccw"></i>초기화</button>
+                                </div>
+                            </div>
+                            <div class="card-foot">기온 곡선은 최저(1월)~최고(8월) 사이 코사인 보간</div>
+                        </section>
+                        <div class="stack">
+                            <!-- 결과: KPI(#simKpis) + 기준 vs 시나리오 차트(#simChart) + 설명(#simCallout) -->
+                            <div class="kpi-grid" id="simKpis"></div>
+                            <section class="card">
+                                <div class="card-head">
+                                    <div><div class="eyebrow">Simulation</div><h3 class="card-title">기준 vs 시나리오 월별 공급량</h3><div class="card-sub">단위: 백만㎥</div></div>
+                                    <div class="legend">
+                                        <span><i class="ln ln--dash" style="border-color:var(--viz-forecast)"></i>기준(평년)</span>
+                                        <span><i class="ln" style="border-color:var(--viz-scenario)"></i>시나리오</span>
+                                    </div>
+                                </div>
+                                <div class="card-body"><div class="chart" style="height:280px"><canvas id="simChart"></canvas></div></div>
+                            </section>
+                            <div id="simCallout"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<!-- 공통 JS 먼저 로드 → 이 페이지 전용 forecast.js -->
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+<script th:src="@{/js/forecast.js}"></script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<!--
+  지역 상세 통계 페이지  (URL: /region , 컨트롤러: DashboardController.region)
+  - 이 파일은 "빈 자리(id)"만 만들어 두고, 내용은 js/region.js 가 id 를 찾아서 채움
+  - 공통 head / sidebar / topbar 는 fragments/layout.html 에서 가져옴
+-->
+<head th:replace="~{fragments/layout :: head('지역 상세 통계')}"></head>
+<body>
+<div class="app">
+    <aside th:replace="~{fragments/layout :: sidebar('region')}"></aside>
+    <main class="main">
+        <header th:replace="~{fragments/layout :: topbar('지역 상세 통계')}"></header>
+        <div class="page">
+            <div class="page-head">
+                <h1>지역 상세 통계</h1>
+                <p>지도에서 지역을 선택하면 해당 지역의 공급·기온·인구 통계를 보여줍니다.</p>
+            </div>
+
+            <!-- 왼쪽: 지역 지도 / 오른쪽: 통계 (2단 배치) -->
+            <div class="grid-map">
+                <!-- 지역 타일맵 → #map -->
+                <section class="card map-card">
+                    <div class="card-head"><div><div class="eyebrow">Map</div><h3 class="card-title">지역 선택</h3><div class="card-sub">타일을 클릭해 지역을 바꿉니다</div></div></div>
+                    <div class="card-body"><div id="map"></div></div>
+                </section>
+
+                <div class="stack">
+                    <!-- 선택 지역 이름·배지(#regionInfo) + 연도 버튼(#yearPills) -->
+                    <div class="region-head">
+                        <div id="regionInfo"></div>
+                        <div id="yearPills" class="pills"></div>
+                    </div>
+
+                    <!-- KPI 카드 4개 (#kpis) -->
+                    <div class="kpi-grid" id="kpis"></div>
+
+                    <!-- 월별 공급량 막대 차트(#monthlyChart). 범례의 '예측'은 2026년 선택 시에만 보임 -->
+                    <section class="card">
+                        <div class="card-head">
+                            <div><div class="eyebrow">Supply</div><h3 class="card-title" id="monthlyTitle">월별 공급량</h3><div class="card-sub">단위: 백만㎥ · 막대 색은 계절</div></div>
+                            <div class="legend">
+                                <span><i class="sw" style="background:var(--season-spring)"></i>봄</span>
+                                <span><i class="sw" style="background:var(--season-summer)"></i>여름</span>
+                                <span><i class="sw" style="background:var(--season-autumn)"></i>가을</span>
+                                <span><i class="sw" style="background:var(--season-winter)"></i>겨울</span>
+                                <span id="legendForecast" hidden><i class="sw" style="background:var(--season-winter-soft)"></i>예측</span>
+                            </div>
+                        </div>
+                        <div class="card-body"><div class="chart" style="height:280px"><canvas id="monthlyChart"></canvas></div></div>
+                    </section>
+
+                    <!-- 아래 2칸: 기온 구간별 차트(#tempChart) / 분기별 인구 차트(#popChart) -->
+                    <div class="grid-2">
+                        <section class="card">
+                            <div class="card-head"><div><div class="eyebrow">Temperature</div><h3 class="card-title">기온 구간별 일평균 공급량</h3><div class="card-sub">최근 1년 · 일평균기온 3°C 간격 12구간</div></div></div>
+                            <div class="card-body">
+                                <div class="chart" style="height:220px"><canvas id="tempChart"></canvas></div>
+                                <div id="tempCallout" class="mt-12"></div>
+                            </div>
+                        </section>
+                        <section class="card">
+                            <div class="card-head"><div><div class="eyebrow">Population</div><h3 class="card-title">분기별 인구수</h3><div class="card-sub">2021 Q1 – 2026 Q2 · 단위: 만 명</div></div></div>
+                            <div class="card-body">
+                                <div class="chart" style="height:220px"><canvas id="popChart"></canvas></div>
+                                <div id="popStats" class="stat-row mt-12"></div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<!-- 공통 JS 먼저 로드 → 이 페이지 전용 region.js -->
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+<script th:src="@{/js/region.js}"></script>
+</body>
+</html>

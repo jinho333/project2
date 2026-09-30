@@ -1,0 +1,86 @@
+/* =====================================================================
+ * tokens.css — 디자인 변수 모음 (색상, 글꼴, 간격)
+ * - :root 에 --이름:값 으로 정의 → 다른 CSS 에서 var(--이름) 으로 사용
+ * - JS 에서도 D.C('--이름') 으로 읽어서 차트 색에 씀
+ * - 색을 바꾸고 싶으면 여기 한 곳만 고치면 전체에 반영됨
+ * ===================================================================== */
+/* Design tokens — City Gas Forecast Design System */
+/* 웹폰트 불러오기 (IBM Plex Sans / KR) */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap');
+:root{
+/* Brand */
+--yellow-500:#f7a501;--yellow-600:#dd9001;--yellow-700:#b17816;--yellow-100:#fdf0d2;
+/* Olive neutrals */
+--ink:#23251d;--charcoal:#33342d;--body:#4d4f46;--mute:#6c6e63;--ash:#9b9c92;--stone:#b6b7af;--hairline:#bfc1b7;--hairline-soft:#dcdfd2;
+--canvas:#eeefe9;--surface-soft:#e5e7e0;--surface-card:#ffffff;--surface-doc:#fcfcfa;--surface-dark:#23251d;--white:#ffffff;
+/* Accents */
+--blue-500:#2c84e0;--blue-100:#dceaf6;--red-500:#cd4239;--red-100:#f7d6d3;--green-500:#2c8c66;--green-100:#d9eddf;--purple-500:#7c44a6;--purple-100:#e7d8ee;
+--link-blue:#1d4ed8;--link-teal:#1078a3;
+/* 용도별 별칭: 위 색들을 '어디에 쓰는지'로 다시 이름 붙인 것 */
+/* Semantic aliases */
+--bg-page:var(--canvas);--bg-card:var(--surface-card);--bg-doc:var(--surface-doc);--bg-subtle:var(--surface-soft);--bg-inverse:var(--surface-dark);
+--text-strong:var(--ink);--text-emph:var(--charcoal);--text-body:var(--body);--text-muted:var(--mute);--text-disabled:var(--ash);--text-faint:var(--stone);--text-on-inverse:var(--white);--text-link:var(--link-teal);
+--border-default:var(--hairline);--border-soft:var(--hairline-soft);--border-focus:var(--blue-500);
+--action-primary:var(--yellow-500);--action-primary-pressed:var(--yellow-600);--action-primary-active:var(--yellow-700);--text-on-primary:var(--ink);
+--action-secondary:var(--surface-soft);--action-secondary-pressed:#d9dcd2;
+--status-info:var(--blue-500);--status-info-bg:var(--blue-100);--status-good:var(--green-500);--status-good-bg:var(--green-100);--status-bad:var(--red-500);--status-bad-bg:var(--red-100);--status-note:var(--purple-500);--status-note-bg:var(--purple-100);
+--focus-ring:rgba(59,130,246,0.5);
+/* Data viz — seasons */
+/* 계절 색: 월별 차트 막대. -soft 는 연한 색(예측월 표시용) */
+--season-spring:#2c8c66;--season-summer:#cd4239;--season-autumn:#b17816;--season-winter:#2c84e0;
+--season-spring-soft:#d9eddf;--season-summer-soft:#f7d6d3;--season-autumn-soft:#f1e3c8;--season-winter-soft:#dceaf6;
+/* Data viz — series */
+/* 선 색: 실적(검정) / 예측(파랑) / 신뢰구간(연한 파랑) / 시나리오(보라) */
+--viz-actual:#23251d;--viz-forecast:#2c84e0;--viz-band:rgba(44,132,224,0.16);--viz-scenario:#7c44a6;--viz-grid:#dcdfd2;--viz-axis:#9b9c92;
+/* Categorical (regions) */
+/* 지역 구분용 8색 (도넛 차트 등) */
+--cat-1:#2c84e0;--cat-2:#2c8c66;--cat-3:#7c44a6;--cat-4:#cd4239;--cat-5:#b17816;--cat-6:#1078a3;--cat-7:#8a8c80;--cat-8:#c9cbc0;
+/* Sequential (volume) */
+/* 단계 색 (연→진): 지도 타일·트리맵에서 값이 클수록 진하게 */
+--seq-0:#f3f4ef;--seq-1:#dceaf6;--seq-2:#a9cbee;--seq-3:#6aa6e6;--seq-4:#2c84e0;--seq-5:#1a5ea8;
+/* Diverging (correlation −1…+1) */
+/* 상관계수 히트맵: 음수=파랑, 0=흰색, 양수=빨강 */
+--div-neg-3:#1a5ea8;--div-neg-2:#6aa6e6;--div-neg-1:#c3daf2;--div-0:#f3f4ef;--div-pos-1:#f2c4bf;--div-pos-2:#e07b72;--div-pos-3:#a8322a;
+}
+
+/* 글꼴·글자 크기 */
+:root{
+--font-sans:'IBM Plex Sans','IBM Plex Sans KR',-apple-system,system-ui,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+--font-mono:'Source Code Pro',ui-monospace,SFMono-Regular,Menlo,monospace;
+--fw-regular:400;
+--fw-medium:500;
+--fw-semibold:600;
+--fw-bold:700;
+--fw-black:700;
+--display-xl-size:36px;--display-xl-lh:1.5;
+--display-lg-size:24px;--display-lg-lh:1.33;
+--display-lg-ls:-0.6px;
+--heading-lg-size:21px;--heading-lg-lh:1.4;
+--heading-lg-ls:-0.5px;
+--heading-md-size:20px;--heading-md-lh:1.4;
+--heading-sm-size:18px;--heading-sm-lh:1.56;
+--body-md-size:16px;--body-md-lh:1.5;
+--body-sm-size:15px;--body-sm-lh:1.71;
+--body-xs-size:14px;--body-xs-lh:1.43;
+--caption-sm-size:13px;--caption-sm-lh:1.5;
+--caption-xs-size:12px;--caption-xs-lh:1.33;
+--button-md-size:14px;--button-sm-size:13px;
+--code-size:14px;--code-lh:1.43;
+--kpi-size:32px;--kpi-lh:1.15;
+--kpi-ls:-0.8px;
+--axis-size:12px;
+}
+
+/* 간격·모서리·그림자·레이아웃 크기 */
+:root{
+--space-xxs:2px;--space-xs:4px;--space-6:6px;--space-sm:8px;--space-md:12px;--space-lg:16px;--space-20:20px;--space-xl:24px;--space-xxl:32px;--space-48:48px;--space-section:80px;
+--radius-none:0px;--radius-xs:2px;--radius-sm:4px;--radius-md:6px;--radius-lg:8px;--radius-full:9999px;
+--border-width:1px;--border-card:1px solid var(--hairline);--border-row:1px solid var(--hairline-soft);
+--shadow-none:none;--shadow-popover:0 4px 12px rgba(35,37,29,0.12);--shadow-focus:0 0 0 3px var(--focus-ring);
+--control-h:36px;--button-h:40px;--button-h-sm:32px;
+--sidebar-w:240px;--topbar-h:56px;--subnav-h:40px;--content-max:1440px;
+--ease-out:cubic-bezier(.2,.7,.2,1);
+--dur-fast:120ms;
+--dur-base:200ms;
+--dur-slow:360ms;
+}
