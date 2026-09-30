@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<!--
+  공통 레이아웃 조각(fragment) 모음 - 모든 페이지가 th:replace 로 필요한 부분만 가져다 씀
+  head(title)    : <head> 영역 (탭 제목, CSS)
+  sidebar(active): 왼쪽 메뉴 (active 값과 같은 메뉴를 강조)
+  topbar(title)  : 상단 바 (현재 위치, 지역 검색)
+  scripts        : 모든 페이지 공통 JS
+-->
+<!-- [head] 사용 예: th:replace="~{fragments/layout :: head('지역 상세 통계')}" -->
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' | 도시가스 공급 대시보드'">도시가스 공급 대시보드</title>
+    <!-- CSS 순서 중요: tokens(색·크기 변수) → common(공통 부품) → dashboard(대시보드 전용) -->
+    <link rel="stylesheet" th:href="@{/css/tokens.css}">
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+</head>
+<body>
+
+<!-- [sidebar] active 값('region' / 'national' / 'forecast')과 같은 메뉴에 is-active 클래스가 붙어 강조됨 -->
+<aside class="sidebar" th:fragment="sidebar(active)">
+    <div class="sidebar-brand">도시가스 공급 대시보드<small>Supply Forecast</small></div>
+    <div class="sidebar-section">통계</div>
+    <!-- @{/region} : 앞에 컨텍스트 경로를 자동으로 붙여주는 Thymeleaf URL 문법 / <i data-lucide="..."> : 아이콘 -->
+    <a class="nav-item" th:href="@{/region}" th:classappend="${active == 'region'} ? 'is-active'"><i data-lucide="map-pin"></i><span>지역 상세</span></a>
+    <a class="nav-item" th:href="@{/national}" th:classappend="${active == 'national'} ? 'is-active'"><i data-lucide="layout-grid"></i><span>전국 통계</span></a>
+    <div class="sidebar-section">예측</div>
+    <a class="nav-item" th:href="@{/forecast}" th:classappend="${active == 'forecast'} ? 'is-active'"><i data-lucide="trending-up"></i><span>공급 예측</span></a>
+    <!-- TODO: 모델 버전·갱신일은 지금 고정 글자. 실제 값으로 바꿀 것 -->
+    <div class="sidebar-foot"><b>모델 v2.3</b>실적 기준 2026.08<br>다음 갱신 2026.10.05</div>
+</aside>
+
+<!-- [topbar] 검색창(#regionSearch)의 Enter 동작은 common.js 에서 처리 -->
+<header class="topbar" th:fragment="topbar(title)">
+    <div class="breadcrumb"><span>대시보드</span><span>/</span><b th:text="${title}">페이지</b></div>
+    <div class="spacer"></div>
+    <label class="input"><i data-lucide="search"></i><input type="search" id="regionSearch" placeholder="지역 검색 (Enter)"></label>
+    <!-- 도움말 / 내보내기 버튼은 아직 기능 연결 안 됨 -->
+    <button class="icon-btn" type="button" title="도움말"><i data-lucide="circle-help"></i></button>
+    <button class="btn btn--secondary btn--sm" type="button"><i data-lucide="download"></i>내보내기</button>
+</header>
+
+<!-- [scripts] 로드 순서 중요: 서버 값 → Chart.js·아이콘 → data.js(GasData) → common.js(Dash) → (각 페이지 js) -->
+<th:block th:fragment="scripts">
+    <!-- 서버(Model) 값을 JS 변수로 넘김
+      CTX            : 앱 기본 경로 ('/')
+      INITIAL_REGION : 컨트롤러가 넘긴 regionId (/region?region=se 로 들어오면 'se') -->
+    <script th:inline="javascript">
+        window.CTX = /*[[@{/}]]*/ '/';
+        window.INITIAL_REGION = /*[[${regionId}]]*/ null;
+    </script>
+    <!-- 외부 라이브러리: Chart.js(차트), lucide(아이콘) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <!-- data.js 는 지금 샘플(가짜) 데이터. 나중에 DB/API 데이터로 교체 대상 -->
+    <script th:src="@{/js/data.js}"></script>
+    <script th:src="@{/js/common.js}"></script>
+</th:block>
+
+</body>
+</html>
