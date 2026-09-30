@@ -4,7 +4,7 @@ spring:
   #데이터베이스 연결 정보
   datasource:
     driverClassName: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
-    url: jdbc:log4jdbc:mariadb://localhost:3306/project-2
+    url: jdbc:log4jdbc:mariadb://192.168.30.79:3306/project-2
     username: user
     password: mariadb
 
