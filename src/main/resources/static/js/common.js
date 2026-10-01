@@ -3,14 +3,61 @@
  * ---------------------------------------------------------------------
  *  C(name)              : CSS 변수 색 읽기           예) C('--ink')
  *  fmt(n, 소수자리)      : 숫자 포맷(천 단위 콤마)    예) fmt(1234.5, 1) → '1,234.5'
- *  getRegion/setRegion  : 선택 지역 읽기/저장 (URL + localStorage)
+ *  MONTHS / season()    : 월 이름, 계절 판별 (예전 data.js 에서 옮겨옴)
+ *  loadRegions()        : ★ 지역 목록을 서버(API)에서 받아옴
+ *  getRegion/setRegion  : 선택 지역 id 읽기/저장 (URL + localStorage)
+ *  url(path)            : 컨텍스트 경로를 붙인 주소 만들기 (API 호출에도 사용)
+ *  showError()          : API 호출 실패 시 화면에 빨간 안내 박스
  *  renderTileMap        : 지역 타일 지도
  *  kpi / callout        : KPI 카드, 설명 박스 HTML 만들기
  *  renderTabs/Pills     : 탭 / 둥근 버튼
  *  hbar                 : 가로 막대 차트
  *  renderTreemap / renderHeatmap : 트리맵 / 상관계수 표
+ *
+ * ---------------------------------------------------------------------
+ * ★ 더미 데이터(data.js)를 없애고 axios 로 서버에서 데이터를 받아오는 구조
+ *   JS 는 Spring 서버의 /api/... 주소만 호출함
+ *   (예측·시뮬레이션은 Spring 이 내부에서 FastAPI(파이썬 모델)를 호출해서 결과를 돌려주면 됨)
+ *
+ * ★ Spring 에서 만들어야 할 API 목록 (응답은 JSON, 키 이름을 아래와 똑같이 맞출 것)
+ *   단위: 공급량 = 백만㎥, 인구 = 만 명, 기온 = °C, 월(m) = 0~11 (0 = 1월)
+ *
+ *   ① GET  /api/regions
+ *        → 17개 시·도 목록 ('전국' 제외)
+ *          [ { id: 'se', name: '서울', supply: 4860, pop: 935, mape: 4.3,
+ *              trend: -0.6, lo: -2.4, hi: 26.8, sensitivity: 5.2 }, ... ]
+ *          supply=2025 연간 공급량, trend=인구 증감률(%/년), lo/hi=1월/8월 평균기온,
+ *          sensitivity=겨울 1°C 하락 시 공급량 증가율(%)
+ *        사용: 모든 페이지 (지도, 지역 정보, 검색, 전국 통계 차트)
+ *
+ *   ② GET  /api/regions/{regionId}/stats?year=2025
+ *        → { months:     [ { m: 0, temp: -2.4, value: 812.3, forecast: false }, ... 12개 ],
+ *            prevMonths: [ ...전년도 12개... ]  (전년도가 없으면 null),
+ *            tempBins:   [ { label: '<−6', value: 3.1, days: 4 }, ... 12개 ],
+ *            popQ:       [ { label: '21.Q1', value: 941.2 }, ... ],
+ *            popCorr:    0.42 }   (인구 ↔ 공급량 상관계수)
+ *        사용: region.js
+ *
+ *   ③ GET  /api/national
+ *        → { supplyYoy: 1.9, mapeDelta: -0.8,
+ *            corrLabels: ['공급량','평균기온',...], corr: [[1,-0.91,...], ...] }
+ *        사용: national.js
+ *
+ *   ④ GET  /api/forecast/summary?horizon=6
+ *        → [ { id: 'se', total: 2310.5 }, ... ]   (지역별 향후 horizon개월 예측 합계)
+ *        사용: forecast.js 지도 색칠
+ *
+ *   ⑤ GET  /api/regions/{regionId}/forecast?horizon=6
+ *        → { hist: [ { label: '25.09', m: 8, value: 120.4 }, ... 실적 12개 ],
+ *            fut:  [ { label: '26.09', m: 8, temp: 21.3, value: 130.1, lo: 120.2, hi: 140.0 }, ... horizon개 ] }
+ *        사용: forecast.js 예측 탭
+ *
+ *   ⑥ POST /api/regions/{regionId}/simulation
+ *        요청 body: { tempLo: -3, tempHi: 27, popPct: 0 }
+ *        → { base: [ { m: 0, temp: -2.4, value: 812.3 }, ... 12개 ],   (평년 기준)
+ *            sim:  [ { m: 0, temp: -3.0, value: 840.1 }, ... 12개 ] }  (입력 조건)
+ *        사용: forecast.js 시뮬레이션 탭
  * ===================================================================== */
-/* 공통 유틸 — 포맷터, Chart.js 기본값/플러그인, 지역 타일맵, 트리맵, 히트맵, KPI, 탭 */
 (function () {
   // CSS 변수(tokens.css)를 JS 에서 읽기 위한 준비
   const rootStyle = getComputedStyle(document.documentElement);
@@ -30,6 +77,29 @@
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
   // 아이콘 그리기: <i data-lucide="이름"> 을 실제 아이콘으로 바꿈. innerHTML 로 새로 그린 뒤 호출해야 함
   const icons = () => window.lucide && window.lucide.createIcons();
+
+  /* ---------- 날짜·계절 도우미 (예전 data.js 에서 옮겨온 것, 데이터가 아니라 계산식이라 화면에 그대로 둠) ---------- */
+  // 월 이름. 배열 인덱스 0 = 1월 … 11 = 12월
+  const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+  // 계절 판별: 12·1·2월 겨울, 3~5월 봄, 6~8월 여름, 9~11월 가을
+  const season = m => (m === 11 || m <= 1 ? 'winter' : m <= 4 ? 'spring' : m <= 7 ? 'summer' : 'autumn'); // m = 0..11
+  const SEASON_KO = { spring: '봄', summer: '여름', autumn: '가을', winter: '겨울' };
+  // 1월 기온(lo)~8월 기온(hi) 사이를 코사인 곡선으로 이어서 m월의 평균기온을 추정 (시뮬레이션 기온 미리보기용)
+  const monthTemp = (lo, hi, m) => (lo + hi) / 2 - ((hi - lo) / 2) * Math.cos((2 * Math.PI * (m - 0.35)) / 12);
+  // 연도 선택 버튼에 보여줄 연도
+  const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+
+  /* ---------- 지역 타일맵 칸 위치 ---------- */
+  // 지도에서 각 지역이 놓일 칸 [열(col), 행(row)]. 데이터가 아니라 "화면 배치"라서 JS 에 둠
+  // 키는 지역 이름 → API ① 의 name 과 글자가 똑같아야 함 ('서울특별시' 처럼 오면 지도에 안 나옴)
+  const TILE_POS = {
+    '경기': [1, 0], '강원': [2, 0],
+    '인천': [0, 1], '서울': [1, 1], '충북': [2, 1], '경북': [3, 1],
+    '충남': [0, 2], '세종': [1, 2], '대전': [2, 2], '대구': [3, 2], '울산': [4, 2],
+    '전북': [1, 3], '경남': [3, 3], '부산': [4, 3],
+    '광주': [0, 4], '전남': [1, 4],
+    '제주': [0, 6]
+  };
 
   /* ---------- Chart.js ---------- */
   // Chart.js 플러그인: 차트를 다 그린 뒤 캔버스에 선/글자를 추가로 직접 그림
@@ -101,44 +171,105 @@
     });
   }
 
-  /* ---------- 지역 상태 (URL ?region= → localStorage → 서울) ---------- */
-  // 선택 지역 우선순위: URL ?region= → 서버가 넘긴 값 → 브라우저 저장값 → 기본 'se'(서울)
+  /* ---------- 서버 주소 / 지역 목록 (API) ---------- */
+  // 컨텍스트 경로를 붙인 주소 만들기   예) url('api/regions') → '/api/regions'
+  // window.CTX 는 layout.html 에서 Thymeleaf 가 넣어줌. 앞에 '/' 를 붙이지 말고 'api/...' 로 쓸 것
+  const url = path => (window.CTX || '/') + path;
+
+  // 받아온 지역 목록을 저장해 두는 곳 (페이지마다 한 번만 받아오면 됨)
+  let regions = [];
+
+  // API ① 호출: 지역 목록 받아오기 → 지도 칸 위치(col,row) 붙여서 저장
+  //   async 함수 : 안에서 await 를 쓸 수 있는 함수. 호출하면 Promise 를 돌려줌
+  //   await       : axios 요청이 끝날 때까지 기다렸다가 결과를 받음 (.then(res => ...) 과 같은 뜻)
+  async function loadRegions() {
+    const res = await axios.get(url('api/regions'));
+    regions = res.data.map(r => {
+      const pos = TILE_POS[r.name] || [null, null];
+      return { ...r, col: pos[0], row: pos[1] };   // { ...r } : r 의 값을 그대로 복사 + col,row 추가
+    });
+    return regions;
+  }
+  const getRegions = () => regions;
+  // id 로 지역 1개 찾기
+  const findRegion = id => regions.find(r => String(r.id) === String(id));
+
+  /* ---------- 선택 지역 id (★ URL 의 regionId) ---------- */
+  // ★ regionId 가 오가는 흐름 (예전에는 data.js 의 'se','gg' 같은 값을 썼음)
+  //   1) 페이지 주소   /region?region=se
+  //        → DashboardController 가 Model 에 regionId 로 담음
+  //        → layout.html 에서 window.INITIAL_REGION = 'se' 로 JS 에 전달
+  //   2) JS 에서 읽기  D.getRegion()  → 아래 우선순위대로 id 를 고름
+  //   3) API 주소에 넣기  axios.get(D.url(`api/regions/${regionId}/stats`))
+  //        → 백틱(`) 문자열 안에 ${regionId} 로 끼워 넣음 → '/api/regions/se/stats'
+  //
+  // ★ id 값의 종류는 API ① 이 돌려주는 id 와 반드시 같아야 함
+  //   - 'se' 같은 코드를 쓰면 : /region?region=se    → /api/regions/se/stats
+  //   - DB region_id(숫자)를 쓰면 : /region?region=1 → /api/regions/1/stats
+  //   (Spring 에서는 @PathVariable 로 받으면 됨)
+
+  // 선택 지역 우선순위: URL ?region= → 서버가 넘긴 값 → 브라우저 저장값 → 목록의 첫 번째 지역
+  // ※ loadRegions() 가 끝난 뒤에 호출해야 함 (목록에 있는 id 인지 확인하기 때문)
   function getRegion() {
     const p = new URLSearchParams(location.search).get('region');
-    const id = p || window.INITIAL_REGION || localStorage.getItem('gasdash.region') || 'se';
-    return window.GasData.regions.some(r => r.id === id) ? id : 'se';
+    const id = p || window.INITIAL_REGION || localStorage.getItem('gasdash.region');
+    if (findRegion(id)) return findRegion(id).id;
+    return regions.length ? regions[0].id : null;
   }
   // 선택 지역을 브라우저에 저장 + 주소창 URL 도 ?region=id 로 바꿈 (새로고침 없이)
   function setRegion(id) {
     localStorage.setItem('gasdash.region', id);
     const u = new URL(location.href); u.searchParams.set('region', id); history.replaceState(null, '', u);
   }
-  // 컨텍스트 경로를 붙인 URL 만들기   예) url('region?region=se')
-  const url = path => (window.CTX || '/') + path;
+
+  /* ---------- API 실패 안내 ---------- */
+  // 요청이 실패하면 콘솔에 에러를 찍고, 페이지 제목 아래에 빨간 안내 박스를 보여줌
+  //   what: 어떤 데이터를 받다가 실패했는지 (예: '지역 목록')
+  function showError(err, what) {
+    console.error(`[API 실패] ${what}`, err);
+    let box = document.getElementById('apiError');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'apiError';
+      box.className = 'mt-12';
+      document.querySelector('.page-head').appendChild(box);
+    }
+    // err.config.url : 실패한 요청 주소, err.response.status : 서버 응답 코드 (404, 500 등)
+    const reqUrl = err && err.config ? err.config.url : '';
+    const status = err && err.response ? ` (${err.response.status})` : ' (서버 응답 없음)';
+    box.innerHTML = callout('red', `${what} 데이터를 불러오지 못했습니다${status}`, `요청 주소: ${reqUrl} — Spring 서버와 API 주소를 확인하세요.`);
+    icons();
+  }
+  // 다시 성공하면 안내 박스 지우기
+  function clearError() {
+    const box = document.getElementById('apiError');
+    if (box) box.remove();
+  }
 
   /* ---------- 지역 타일맵 ---------- */
   // 5×7 격자를 돌면서 지역이 있는 칸은 버튼, 없는 칸은 빈칸으로
   //   valueOf: 색을 정할 값, selected: 선택 지역 id, onSelect: 클릭 시 실행할 함수
   function renderTileMap(el, { valueOf, selected, onSelect, legendLabel = '연간 공급량' }) {
-    const R = window.GasData.regions;
+    const R = regions;
     const vals = R.map(valueOf), mn = Math.min(...vals), mx = Math.max(...vals);
     let html = '<div class="tilemap">';
     for (let row = 0; row < 7; row++) for (let col = 0; col < 5; col++) {
       const r = R.find(x => x.row === row && x.col === col);
       if (!r) { html += '<span class="tile-empty"></span>'; continue; }
       const v = valueOf(r), t = (v - mn) / (mx - mn || 1);
-      html += `<button type="button" class="tile${r.id === selected ? ' is-selected' : ''}" data-id="${r.id}" style="background:${seq(t)};color:${seqInk(t)}" aria-pressed="${r.id === selected}"><b>${r.name}</b><span>${fmt(v)}</span></button>`;
+      html += `<button type="button" class="tile${String(r.id) === String(selected) ? ' is-selected' : ''}" data-id="${r.id}" style="background:${seq(t)};color:${seqInk(t)}" aria-pressed="${String(r.id) === String(selected)}"><b>${r.name}</b><span>${fmt(v)}</span></button>`;
     }
     html += '</div>';
     html += `<div class="scale"><span>${legendLabel}</span><span>${fmt(mn)}</span><span class="steps">${SEQ.map(s => `<i style="background:var(${s})"></i>`).join('')}</span><span>${fmt(mx)}</span></div>`;
     el.innerHTML = html;
     // HTML 을 넣은 뒤 각 타일에 클릭 이벤트 연결
-    el.querySelectorAll('.tile').forEach(b => { b.onclick = () => onSelect(b.dataset.id); });
+    // data-id 는 항상 문자열이라 목록에 있는 원래 id(숫자일 수도 있음)로 바꿔서 넘김
+    el.querySelectorAll('.tile').forEach(b => { b.onclick = () => onSelect(findRegion(b.dataset.id).id); });
   }
 
   // 지역 이름 + 전국 비중 배지 + MAPE 배지 (8% 초과 빨강, 6.5% 초과 노랑, 나머지 초록)
   function renderRegionInfo(el, r) {
-    const total = window.GasData.regions.reduce((s, x) => s + x.supply, 0);
+    const total = regions.reduce((s, x) => s + x.supply, 0);
     const tone = r.mape > 8 ? 'red' : r.mape > 6.5 ? 'yellow' : 'green';
     el.innerHTML = `<div class="eyebrow">선택 지역</div>
       <div class="region-name"><span>${r.name}</span>
@@ -233,18 +364,25 @@
 
   /* ---------- 상단 지역 검색 ---------- */
   // 페이지 로딩이 끝나면: 아이콘 그리기 + 상단 검색창에서 Enter 시 해당 지역 상세 페이지로 이동
+  // (지역 목록은 각 페이지가 loadRegions() 로 받아온 것을 사용)
   document.addEventListener('DOMContentLoaded', () => {
     icons();
     const s = document.getElementById('regionSearch');
     if (s) s.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
       const q = s.value.trim(); if (!q) return;
-      const r = window.GasData.regions.find(x => x.name.includes(q) || q.includes(x.name));
+      const r = regions.find(x => x.name.includes(q) || q.includes(x.name));
+      // ★ 검색한 지역의 id 를 페이지 주소의 ?region= 에 넣어서 이동
       if (r) location.href = url(`region?region=${r.id}`);
       else { s.value = ''; s.placeholder = '일치하는 지역 없음'; }
     });
   });
 
   // 다른 파일에서 D.함수이름() 으로 쓸 수 있게 등록
-  window.Dash = { C, fmt, seq, seqInk, divColor, debounce, icons, hbar, getRegion, setRegion, url, renderTileMap, renderRegionInfo, kpi, renderTabs, renderPills, callout, renderTreemap, renderHeatmap };
+  window.Dash = {
+    C, fmt, seq, seqInk, divColor, debounce, icons, hbar,
+    MONTHS, season, SEASON_KO, monthTemp, YEARS,
+    url, loadRegions, getRegions, findRegion, getRegion, setRegion, showError, clearError,
+    renderTileMap, renderRegionInfo, kpi, renderTabs, renderPills, callout, renderTreemap, renderHeatmap
+  };
 })();
