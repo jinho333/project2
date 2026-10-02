@@ -10,25 +10,35 @@
  *   horizon  : 3 | 6 (개월)   showBand : 신뢰구간 표시 여부
  *
  * 동작 흐름: 값 변경 → render() → renderHead() + (예측 또는 시뮬레이션) 다시 그리기
+ *
+ * 사용하는 API (자세한 응답 모양은 common.js 맨 위 참고)
+ *   ① GET  /api/regions                                  지역 목록
+ *   ④ GET  /api/forecast/summary?horizon=6               지도 색칠용 지역별 예측 합계
+ *   ⑤ GET  /api/regions/{regionId}/forecast?horizon=6    선택 지역 예측
+ *   ⑥ POST /api/regions/{regionId}/simulation            시뮬레이션 (body: tempLo, tempHi, popPct)
+ *   ※ ④⑤⑥ 은 Spring 이 FastAPI(파이썬 모델)를 호출해서 받은 결과를 그대로 돌려주면 됨
  * ===================================================================== */
-/* 공급 예측 + 시뮬레이션 */
 (function () {
-  const G = window.GasData, D = window.Dash, { C, fmt } = D;
+  const D = window.Dash, { C, fmt } = D;
   const $ = id => document.getElementById(id);
-  let regionId = D.getRegion(), view = 'forecast', horizon = 6, showBand = true;
+  let regionId = null, view = 'forecast', horizon = 6, showBand = true;
   // 만든 차트 보관 + 같은 캔버스에 다시 그릴 땐 기존 차트 삭제 후 생성 (region.js 와 같은 방식)
   const charts = {};
   const make = (key, canvas, cfg) => { if (charts[key]) charts[key].destroy(); charts[key] = new Chart(canvas, cfg); };
-  // 현재 선택 지역 데이터 가져오기
-  const region = () => G.regions.find(x => x.id === regionId);
+  // 현재 선택 지역 정보 가져오기 (API ① 에서 받아둔 목록에서 찾음)
+  const region = () => D.findRegion(regionId);
   // 계절 → 배지 색 (표의 '계절' 칸)
   const SEASON_TONE = { winter: 'blue', autumn: 'yellow', summer: 'red', spring: 'green' };
 
+  // 요청 번호: 빠르게 여러 번 바꿨을 때 늦게 도착한 예전 응답이 화면을 덮어쓰지 않게 막는 용도 (region.js 와 같음)
+  let requestNo = 0;
+
   // 시뮬레이션 상태
-  // def     : 지역 기본 기온 범위 [최저, 최고]
-  // draft   : 슬라이더로 조정 중인 값 (아직 실행 안 함)
-  // applied : '실행' 버튼을 눌러 결과에 반영된 값
-  let def, draft, applied;
+  // def      : 지역 기본 기온 범위 [최저, 최고]
+  // draft    : 슬라이더로 조정 중인 값 (아직 실행 안 함)
+  // applied  : '실행' 버튼을 눌러 결과에 반영된 값
+  // lastDiff : 마지막 실행 결과의 연간 변화율(%) - 설명 박스에 다시 쓰려고 저장
+  let def, draft, applied, lastDiff = 0;
   // 지역을 바꾸거나 초기화할 때 기본값으로 되돌림
   function resetSim() {
     const r = region();
@@ -44,25 +54,53 @@
     D.renderTabs($('viewTabs'), [{ id: 'forecast', label: '예측', icon: 'trending-up' }, { id: 'simulation', label: '시뮬레이션', icon: 'sliders-horizontal' }], view, v => { view = v; render(); });
     const sel = $('regionSelect');
     sel.hidden = view !== 'simulation';
-    sel.innerHTML = G.regions.map(x => `<option value="${x.id}"${x.id === regionId ? ' selected' : ''}>${x.name}</option>`).join('');
+    // 지역 드롭다운: <option value="지역 id"> 로 만들어서, 고르면 그 id 로 changeRegion() 호출
+    sel.innerHTML = D.getRegions().map(x => `<option value="${x.id}"${String(x.id) === String(regionId) ? ' selected' : ''}>${x.name}</option>`).join('');
     $('mapCard').hidden = view !== 'forecast';
     $('fcLayout').classList.toggle('grid-map--single', view !== 'forecast');
     $('forecastView').hidden = view !== 'forecast';
     $('simView').hidden = view !== 'simulation';
   }
 
-  // 지역 변경 공통 처리: 저장 → 시뮬레이션 초기화 → 다시 그리기
-  function changeRegion(id) { regionId = id; D.setRegion(id); resetSim(); render(); }
+  // 지역 변경 공통 처리: 저장(주소창 ?region= 도 바뀜) → 시뮬레이션 초기화 → 다시 그리기
+  function changeRegion(id) { regionId = D.findRegion(id).id; D.setRegion(regionId); resetSim(); render(); }
 
   /* ---------- 예측 ---------- */
-  function renderForecast() {
+  //   async : 안에서 await (서버 응답 기다리기)를 쓰기 위해 붙임
+  async function renderForecast() {
     const r = region();
-    // 지도 색 = 각 지역의 향후 horizon개월 예측 합계
-    D.renderTileMap($('map'), { valueOf: x => G.forecast(x, { horizon }).fut.reduce((s, f) => s + f.value, 0), selected: r.id, legendLabel: `${horizon}개월 예측`, onSelect: changeRegion });
     D.renderTabs($('horizonTabs'), [{ id: 3, label: '3개월' }, { id: 6, label: '6개월' }], horizon, h => { horizon = h; renderForecast(); });
 
-    // hist: 최근 실적 12개월, fut: 예측 horizon개월 (data.js 의 G.forecast)
-    const { hist, fut } = G.forecast(r, { horizon });
+    const myNo = ++requestNo;   // 이번 요청 번호
+    let summary, fc;
+    try {
+      // API ④ 지도 색칠용: 모든 지역의 향후 horizon개월 예측 합계
+      //   params: { horizon } → 주소 뒤에 ?horizon=6 을 자동으로 붙여줌
+      const res1 = await axios.get(D.url('api/forecast/summary'), { params: { horizon } });
+      summary = res1.data;
+
+      // API ⑤ 선택 지역의 예측
+      // ★ regionId 를 URL 에 넣는 곳
+      //   `...${regionId}...` : 백틱(`) 문자열 안에 변수 값을 끼워 넣는 문법
+      //   regionId 가 'se' 이면 → '/api/regions/se/forecast?horizon=6'
+      //   Spring: @GetMapping("/api/regions/{regionId}/forecast") + @PathVariable, @RequestParam
+      const res2 = await axios.get(D.url(`api/regions/${regionId}/forecast`), { params: { horizon } });
+      fc = res2.data;
+    } catch (err) {
+      D.showError(err, `${r.name} 예측`);
+      return;
+    }
+    if (myNo !== requestNo) return;   // 그 사이 다른 지역/기간/탭을 눌렀으면 이 응답은 버림
+    D.clearError();
+
+    // 지도 색 = 각 지역의 향후 horizon개월 예측 합계
+    // summary 배열을 { 'se': 2310.5, 'gg': ... } 모양으로 바꿔서 id 로 바로 찾을 수 있게 함
+    const totals = {};
+    summary.forEach(t => { totals[t.id] = t.total; });
+    D.renderTileMap($('map'), { valueOf: x => totals[x.id] || 0, selected: r.id, legendLabel: `${horizon}개월 예측`, onSelect: changeRegion });
+
+    // hist: 최근 실적 12개월, fut: 예측 horizon개월
+    const { hist, fut } = fc;
     const n = hist.length;
     // 차트용 배열 만들기 (x축 = 실적 라벨 + 예측 라벨)
     //   actual   : 실적 구간만 값, 예측 구간은 null (선을 안 그림)
@@ -70,7 +108,7 @@
     const labels = [...hist.map(h => h.label), ...fut.map(f => f.label)];
     const last = (i, v) => (i === n - 1 ? v : null);
     const actual = [...hist.map(h => h.value), ...fut.map(() => null)];
-    const fc = [...hist.map((h, i) => last(i, h.value)), ...fut.map(f => f.value)];
+    const fcLine = [...hist.map((h, i) => last(i, h.value)), ...fut.map(f => f.value)];
     const lo = [...hist.map((h, i) => last(i, h.value)), ...fut.map(f => f.lo)];
     const hi = [...hist.map((h, i) => last(i, h.value)), ...fut.map(f => f.hi)];
     // KPI 계산: 예측 합계 vs 1년 전 같은 기간 실적
@@ -94,7 +132,7 @@
           { label: '상한', data: hi, borderWidth: 0, pointRadius: 0, fill: false, hidden: !showBand },
           { label: '하한', data: lo, borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: C('--viz-band'), hidden: !showBand },
           { label: '실적', data: actual, borderColor: C('--viz-actual'), backgroundColor: '#fff', borderWidth: 2, pointRadius: 2.5, pointBorderWidth: 1.5 },
-          { label: '예측', data: fc, borderColor: C('--viz-forecast'), backgroundColor: '#fff', borderDash: [5, 4], borderWidth: 2, pointRadius: 2.5, pointBorderWidth: 1.5 }
+          { label: '예측', data: fcLine, borderColor: C('--viz-forecast'), backgroundColor: '#fff', borderDash: [5, 4], borderWidth: 2, pointRadius: 2.5, pointBorderWidth: 1.5 }
         ]
       },
       options: {
@@ -103,8 +141,8 @@
         plugins: {
           // split: common.js 에 만든 플러그인. 실적/예측 경계에 세로선 + 예측 구간 음영
           split: { index: n - 1, label: '예측' },
+          // 툴팁에는 실적·예측만 표시(상한·하한 제외), 예측 구간이면 범위도 추가
           tooltip: {
-            // 툴팁에는 실적·예측만 표시(상한·하한 제외), 예측 구간이면 범위도 추가
             filter: it => it.datasetIndex >= 2 && it.raw !== null,
             callbacks: {
               label: it => `${it.dataset.label} ${fmt(it.raw)} 백만㎥`,
@@ -117,9 +155,10 @@
 
     // 월별 예측 표: 예측 배열 → <tr> 문자열로 만들어 한 번에 넣기
     $('fcTable').innerHTML = fut.map(f => {
-      const s = G.season(f.m);
-      return `<tr><td class="strong">${f.label}</td><td>${fmt(f.temp, 1)}°C</td><td class="strong">${fmt(f.value)}</td><td class="muted">${fmt(f.lo)}</td><td class="muted">${fmt(f.hi)}</td><td><span class="badge badge--${SEASON_TONE[s]}">${G.SEASON_KO[s]}</span></td></tr>`;
+      const s = D.season(f.m);
+      return `<tr><td class="strong">${f.label}</td><td>${fmt(f.temp, 1)}°C</td><td class="strong">${fmt(f.value)}</td><td class="muted">${fmt(f.lo)}</td><td class="muted">${fmt(f.hi)}</td><td><span class="badge badge--${SEASON_TONE[s]}">${D.SEASON_KO[s]}</span></td></tr>`;
     }).join('');
+    D.icons();
   }
 
   /* ---------- 시뮬레이션 ---------- */
@@ -130,7 +169,7 @@
   // dirty: 슬라이더 값이 실행된 값과 다른지 (true 면 '실행' 버튼 활성화)
   const dirty = () => draft.range[0] !== applied.range[0] || draft.range[1] !== applied.range[1] || draft.popPct !== applied.popPct;
 
-  // draft 값을 화면(슬라이더 위치, 라벨, 색 막대, 기온 미리보기)에 반영
+  // draft 값을 화면(슬라이더 위치, 라벨, 색 막대, 기온 미리보기)에 반영 - 서버 요청 없이 화면만 바꿈
   function syncInputs() {
     const [a, b] = draft.range;
     $('tempLo').value = a; $('tempHi').value = b;
@@ -138,9 +177,10 @@
     $('tempLo').style.zIndex = a > (T_MIN + T_MAX) / 2 ? 3 : 2;
     $('tempLoLabel').textContent = `${a}°C`; $('tempHiLabel').textContent = `${b}°C`;
     $('tempFill').style.left = pctT(a) + '%'; $('tempFill').style.width = (pctT(b) - pctT(a)) + '%';
-    $('tempPreview').innerHTML = G.MONTHS.map((_, m) => {
-      const t = G.monthTemp(a, b, m);
-      return `<div title="${m + 1}월 ${t.toFixed(1)}°C" style="height:${Math.max(6, ((t - T_MIN) / (T_MAX - T_MIN)) * 100)}%;background:var(--season-${G.season(m)})"></div>`;
+    // 기온 미리보기 12개 막대 (계산식이라 서버 없이 화면에서 바로 계산)
+    $('tempPreview').innerHTML = D.MONTHS.map((_, m) => {
+      const t = D.monthTemp(a, b, m);
+      return `<div title="${m + 1}월 ${t.toFixed(1)}°C" style="height:${Math.max(6, ((t - T_MIN) / (T_MAX - T_MIN)) * 100)}%;background:var(--season-${D.season(m)})"></div>`;
     }).join('');
     const p = draft.popPct;
     $('popSlider').value = p;
@@ -150,22 +190,43 @@
     $('runSim').disabled = !dirty();
   }
 
-  // applied 기준으로 결과 그리기: 기준(평년) vs 시나리오 연간 합계 차이(%)
-  function renderSimResult() {
+  // applied 조건으로 서버에 시뮬레이션 요청 → 기준(평년) vs 시나리오 결과 그리기
+  async function renderSimResult() {
     const r = region();
-    const base = G.yearProfile(r, {}), sim = G.yearProfile(r, applied);
+    const myNo = ++requestNo;
+    let base, sim;
+    try {
+      // API ⑥ 시뮬레이션 (POST: 입력값을 body 에 JSON 으로 담아서 보냄)
+      // ★ regionId 를 URL 에 넣는 곳 → '/api/regions/se/simulation'
+      //   두 번째 값 { tempLo, tempHi, popPct } 가 요청 body
+      //   Spring: @PostMapping("/api/regions/{regionId}/simulation") + @PathVariable + @RequestBody(DTO)
+      const res = await axios.post(D.url(`api/regions/${regionId}/simulation`), {
+        tempLo: applied.range[0],
+        tempHi: applied.range[1],
+        popPct: applied.popPct
+      });
+      base = res.data.base;
+      sim = res.data.sim;
+    } catch (err) {
+      D.showError(err, `${r.name} 시뮬레이션`);
+      return;
+    }
+    if (myNo !== requestNo) return;
+    D.clearError();
+
+    // 기준(평년) vs 시나리오 연간 합계 차이(%)
     const bTot = base.reduce((s, d) => s + d.value, 0), sTot = sim.reduce((s, d) => s + d.value, 0);
-    const diff = ((sTot - bTot) / bTot) * 100;
+    lastDiff = ((sTot - bTot) / bTot) * 100;
     const peak = sim.reduce((a, d) => (d.value > a.value ? d : a));
     $('simKpis').innerHTML = [
-      D.kpi({ label: '연간 공급량 (시나리오)', value: fmt(sTot), unit: '백만㎥', delta: diff, deltaLabel: '기준 대비', accent: 'var(--viz-scenario)' }),
+      D.kpi({ label: '연간 공급량 (시나리오)', value: fmt(sTot), unit: '백만㎥', delta: lastDiff, deltaLabel: '기준 대비', accent: 'var(--viz-scenario)' }),
       D.kpi({ label: '피크 월 공급량', value: fmt(peak.value), unit: '백만㎥', caption: `${peak.m + 1}월 · ${fmt(peak.temp, 1)}°C` }),
       D.kpi({ label: '적용 조건', value: `${applied.range[0]}~${applied.range[1]}°C`, caption: `인구 ${applied.popPct >= 0 ? '+' : ''}${applied.popPct}%` })
     ].join('');
     make('sim', $('simChart'), {
       type: 'line',
       data: {
-        labels: G.MONTHS,
+        labels: D.MONTHS,
         datasets: [
           { label: '기준', data: base.map(d => d.value), borderColor: C('--viz-forecast'), borderDash: [5, 4], borderWidth: 2, pointRadius: 0 },
           { label: '시나리오', data: sim.map(d => d.value), borderColor: C('--viz-scenario'), backgroundColor: '#fff', borderWidth: 2.5, pointRadius: 3, pointBorderWidth: 1.5 }
@@ -177,7 +238,7 @@
         plugins: { tooltip: { callbacks: { label: it => `${it.dataset.label} ${fmt(it.raw)} 백만㎥` } } }
       }
     });
-    renderSimCallout(diff);
+    renderSimCallout(lastDiff);
   }
 
   // 결과 설명 박스: 입력만 바꾸고 실행 안 했으면 '실행하세요' 안내, 5% 넘게 변하면 빨강
@@ -190,18 +251,18 @@
     }
     D.icons();
   }
-  // 현재 applied 기준 변화율(%) 다시 계산
-  const currentDiff = () => { const r = region(); const b = G.yearProfile(r, {}).reduce((s, d) => s + d.value, 0); const s = G.yearProfile(r, applied).reduce((x, d) => x + d.value, 0); return ((s - b) / b) * 100; };
 
   // 이벤트 연결 (페이지 시작 시 한 번만)
+  // 슬라이더를 움직이는 동안에는 서버에 요청하지 않고 화면만 바꿈 → '실행'을 눌러야 요청
   function bindSim() {
     // 최저·최고 기온은 최소 5°C 차이를 유지
-    $('tempLo').oninput = () => { let v = +$('tempLo').value; v = Math.min(v, draft.range[1] - 5); draft.range = [v, draft.range[1]]; syncInputs(); renderSimCallout(currentDiff()); };
-    $('tempHi').oninput = () => { let v = +$('tempHi').value; v = Math.max(v, draft.range[0] + 5); draft.range = [draft.range[0], v]; syncInputs(); renderSimCallout(currentDiff()); };
-    $('popSlider').oninput = () => { draft.popPct = +$('popSlider').value; syncInputs(); renderSimCallout(currentDiff()); };
-    // 실행: draft → applied 로 복사하고 결과 다시 그리기
+    $('tempLo').oninput = () => { let v = +$('tempLo').value; v = Math.min(v, draft.range[1] - 5); draft.range = [v, draft.range[1]]; syncInputs(); renderSimCallout(lastDiff); };
+    $('tempHi').oninput = () => { let v = +$('tempHi').value; v = Math.max(v, draft.range[0] + 5); draft.range = [draft.range[0], v]; syncInputs(); renderSimCallout(lastDiff); };
+    $('popSlider').oninput = () => { draft.popPct = +$('popSlider').value; syncInputs(); renderSimCallout(lastDiff); };
+    // 실행: draft → applied 로 복사하고 서버에 요청해서 결과 다시 그리기
     $('runSim').onclick = () => { applied = { range: [...draft.range], popPct: draft.popPct }; syncInputs(); renderSimResult(); };
     $('resetSim').onclick = () => { resetSim(); syncInputs(); renderSimResult(); };
+    // 드롭다운의 value = 지역 id
     $('regionSelect').onchange = e => changeRegion(e.target.value);
     $('bandToggle').onchange = e => { showBand = e.target.checked; renderForecast(); };
   }
@@ -215,8 +276,19 @@
   }
 
   // 페이지 처음 열릴 때 실행
-  D.setRegion(regionId);
-  resetSim();
-  bindSim();
-  render();
+  async function init() {
+    try {
+      await D.loadRegions();          // API ① 지역 목록 받기
+    } catch (err) {
+      D.showError(err, '지역 목록');
+      return;
+    }
+    // ★ 첫 화면의 regionId 정하기: 주소의 ?region=se → 서버가 넘긴 값 → 저장값 → 첫 번째 지역
+    regionId = D.getRegion();
+    D.setRegion(regionId);
+    resetSim();
+    bindSim();
+    render();
+  }
+  init();
 })();

@@ -42,21 +42,22 @@
     <button class="btn btn--secondary btn--sm" type="button"><i data-lucide="download"></i>내보내기</button>
 </header>
 
-<!-- [scripts] 로드 순서 중요: 서버 값 → Chart.js·아이콘 → data.js(GasData) → common.js(Dash) → (각 페이지 js) -->
+<!-- [scripts] 로드 순서 중요: 서버 값 → axios·Chart.js·아이콘 → common.js(Dash) → (각 페이지 js)
+     ※ 더미 데이터 data.js 는 더 이상 쓰지 않음. 데이터는 각 페이지 js 가 axios 로 /api/... 에서 받아옴 -->
 <th:block th:fragment="scripts">
     <!-- 서버(Model) 값을 JS 변수로 넘김
-      CTX            : 앱 기본 경로 ('/')
-      INITIAL_REGION : 컨트롤러가 넘긴 regionId (/region?region=se 로 들어오면 'se') -->
+      CTX            : 앱 기본 경로 ('/') → JS 에서 D.url('api/...') 로 API 주소를 만들 때 앞에 붙음
+      INITIAL_REGION : ★ 컨트롤러가 넘긴 regionId (/region?region=se 로 들어오면 'se')
+                       JS 의 D.getRegion() 이 이 값을 읽어서 API 주소(/api/regions/se/...)에 넣음 -->
     <script th:inline="javascript">
         window.CTX = /*[[@{/}]]*/ '/';
         window.INITIAL_REGION = /*[[${regionId}]]*/ null;
     </script>
+    <!-- 외부 라이브러리: axios(서버 요청), Chart.js(차트), lucide(아이콘) -->
     <script src="https://cdn.jsdelivr.net/npm/axios@1.13.2/dist/axios.min.js"></script>
-    <!-- 외부 라이브러리: Chart.js(차트), lucide(아이콘) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
-    <!-- data.js 는 지금 샘플(가짜) 데이터. 나중에 DB/API 데이터로 교체 대상 -->
-    <script th:src="@{/js/data.js}"></script>
+    <!-- 공통 함수 + API 목록(맨 위 주석) -->
     <script th:src="@{/js/common.js}"></script>
 </th:block>
 

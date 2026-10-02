@@ -9,13 +9,18 @@
  *   5) 분기별 인구 추이 선 차트
  *
  * 동작 흐름
+ *   페이지 열림 → API ① 지역 목록 받기 → render()
  *   지역 클릭 / 연도 클릭 → 변수(regionId, year) 변경 → render() 다시 실행
- *   → 화면 전체를 새 값으로 다시 그림
+ *   render() 안에서 API ② 로 그 지역·연도의 통계를 받아와서 화면을 다시 그림
+ *
+ * 사용하는 API (자세한 응답 모양은 common.js 맨 위 참고)
+ *   ① GET /api/regions
+ *   ② GET /api/regions/{regionId}/stats?year=2025
  *
  * 다른 파일에서 준비해 두는 것
- *   window.GasData : 지역·연도·월별 데이터 (G)
- *   window.Dash    : 공통 화면 함수 모음 (D) - 지도, KPI 카드, 버튼, 숫자 포맷 등
- *   Chart          : Chart.js 라이브러리 (차트 그리기)
+ *   window.Dash : 공통 화면 함수 모음 (D) - 지도, KPI 카드, 버튼, 숫자 포맷, 지역 목록 등
+ *   axios       : 서버 요청 라이브러리 (layout.html 에서 CDN 으로 불러옴)
+ *   Chart       : Chart.js 라이브러리 (차트 그리기)
  * ===================================================================== */
 
 // (function () { ... })();
@@ -27,7 +32,6 @@
   // ---------------------------------------------------------------
   // 준비: 자주 쓰는 것들을 짧은 이름으로 꺼내두기
   // ---------------------------------------------------------------
-  const G = window.GasData;   // 데이터
   const D = window.Dash;      // 공통 화면 함수
 
   // const { C, fmt } = D;  → D.C, D.fmt 를 꺼내서 C, fmt 라는 이름으로 쓰겠다는 뜻 (구조 분해 할당)
@@ -39,8 +43,8 @@
   const $ = id => document.getElementById(id);
 
   // 현재 화면 상태
-  let regionId = D.getRegion();   // 선택된 지역 (다른 페이지에서 골라둔 지역을 이어받음)
-  let year = 2025;                // 선택된 연도 (기본값 2025)
+  let regionId = null;   // 선택된 지역 id (지역 목록을 받은 뒤 init() 에서 정함)
+  let year = 2025;       // 선택된 연도 (기본값 2025)
 
   // 만들어진 차트들을 보관하는 곳 { monthly: 차트, temp: 차트, pop: 차트 }
   const charts = {};
@@ -53,17 +57,22 @@
     charts[key] = new Chart(canvas, cfg);     // 새로 만들어서 저장
   };
 
+  // 요청 번호: 지역을 빠르게 여러 번 클릭하면 응답이 늦게 온 "예전 요청"이 화면을 덮어쓸 수 있음.
+  // 그래서 render() 할 때마다 번호를 올리고, 응답이 왔을 때 번호가 최신이 아니면 무시함.
+  let requestNo = 0;
+
 
   // ===============================================================
   // render() : 화면 전체를 현재 regionId, year 기준으로 다시 그림
+  //   async : 안에서 await (서버 응답 기다리기)를 쓰기 위해 붙임
   // ===============================================================
-  function render() {
+  async function render() {
 
-    // 선택된 지역 데이터 1개 찾기 (Java의 stream().filter().findFirst() 와 비슷)
-    const r = G.regions.find(x => x.id === regionId);
+    // 선택된 지역 정보 1개 (API ① 에서 받아둔 목록에서 찾음)
+    const r = D.findRegion(regionId);
 
     // ---------------------------------------------------------------
-    // 1) 지도 / 지역 정보 / 연도 버튼
+    // 1) 지도 / 지역 정보 / 연도 버튼  (지역 목록만 있으면 바로 그릴 수 있음)
     // ---------------------------------------------------------------
 
     // 타일맵: 지역별 연간 공급량으로 색을 칠함
@@ -71,7 +80,7 @@
       valueOf: x => x.supply,        // 색을 정할 기준값 = 공급량
       selected: r.id,                // 현재 선택된 지역 강조
       legendLabel: '연간 공급량',
-      // 지도에서 지역을 클릭하면: 선택 지역 변경 → 저장 → 화면 다시 그리기
+      // 지도에서 지역을 클릭하면: 선택 지역 변경 → 저장(URL 의 ?region= 도 바뀜) → 화면 다시 그리기
       onSelect: id => { regionId = id; D.setRegion(id); render(); }
     });
 
@@ -82,10 +91,31 @@
     // 2026년은 아직 끝나지 않은 해라서 '2026 (진행)'으로 표시
     D.renderPills(
       $('yearPills'),
-      G.YEARS.map(y => ({ id: y, label: y === 2026 ? '2026 (진행)' : String(y) })),
+      D.YEARS.map(y => ({ id: y, label: y === 2026 ? '2026 (진행)' : String(y) })),
       year,                                   // 현재 선택된 연도
       y => { year = y; render(); }            // 버튼 클릭 시: 연도 변경 → 다시 그리기
     );
+
+
+    // ---------------------------------------------------------------
+    // 서버에서 이 지역·연도의 통계 받아오기 (API ②)
+    // ---------------------------------------------------------------
+    const myNo = ++requestNo;   // 이번 요청 번호
+    let stats;
+    try {
+      // ★ regionId 를 URL 에 넣는 곳
+      //   `...${regionId}...` : 백틱(`) 문자열 안에 변수 값을 끼워 넣는 문법 (템플릿 문자열)
+      //   regionId 가 'se' 이면 → '/api/regions/se/stats?year=2025' 로 요청됨
+      //   params: { year } → 주소 뒤에 ?year=2025 를 자동으로 붙여줌
+      //   Spring 에서는 @GetMapping("/api/regions/{regionId}/stats") + @PathVariable, @RequestParam 으로 받으면 됨
+      const res = await axios.get(D.url(`api/regions/${regionId}/stats`), { params: { year } });
+      stats = res.data;
+    } catch (err) {
+      D.showError(err, `${r.name} ${year}년 통계`);
+      return;   // 실패하면 아래 차트는 그리지 않음
+    }
+    if (myNo !== requestNo) return;   // 그 사이 다른 지역/연도를 눌렀으면 이 응답은 버림
+    D.clearError();
 
 
     // ---------------------------------------------------------------
@@ -93,8 +123,8 @@
     // ---------------------------------------------------------------
     // months : 선택 연도의 12개월 데이터 배열 [{ m: 0, value: 공급량, temp: 기온, forecast: 예측여부 }, ...]
     //          m 은 0부터 시작 (0 = 1월, 11 = 12월)
-    const months = r.years[year];
-    const prev = r.years[year - 1];   // 전년도 데이터 (2021년이면 없음 → undefined)
+    const months = stats.months;
+    const prev = stats.prevMonths;   // 전년도 데이터 (2021년이면 서버가 null 을 보냄)
 
     // 배열의 value를 모두 더하는 함수
     // reduce: 배열을 돌면서 값을 하나로 누적 (for문으로 s += d.value 하는 것과 같음)
@@ -147,7 +177,7 @@
       }),
       D.kpi({
         label: '피크 월',
-        value: G.MONTHS[peak.m],                                // 0 → '1월' 로 변환
+        value: D.MONTHS[peak.m],                                // 0 → '1월' 로 변환
         caption: `${fmt(peak.value)} 백만㎥`
       })
     ].join('');
@@ -164,12 +194,12 @@
     make('monthly', $('monthlyChart'), {
       type: 'bar',
       data: {
-        labels: G.MONTHS,                                        // x축: 1월 ~ 12월
+        labels: D.MONTHS,                                        // x축: 1월 ~ 12월
         datasets: [{
           data: months.map(d => d.value),                        // y축: 월별 공급량
           // 막대 색: 계절 색상 사용. 예측값이면 '-soft'(연한 색)를 붙임
           //   예) 1월 실적 → '--season-winter', 11월 예측 → '--season-autumn-soft'
-          backgroundColor: months.map(d => C(`--season-${G.season(d.m)}${d.forecast ? '-soft' : ''}`)),
+          backgroundColor: months.map(d => C(`--season-${D.season(d.m)}${d.forecast ? '-soft' : ''}`)),
           borderRadius: 3,          // 막대 모서리 둥글게
           maxBarThickness: 48       // 막대 최대 두께
         }]
@@ -186,7 +216,7 @@
               // 제목: '2025년 1월 · 겨울 · 평균 -2.4°C' (예측이면 ' · 예측' 추가)
               title: it => {
                 const d = months[it[0].dataIndex];
-                return `${year}년 ${d.m + 1}월 · ${G.SEASON_KO[G.season(d.m)]} · 평균 ${fmt(d.temp, 1)}°C${d.forecast ? ' · 예측' : ''}`;
+                return `${year}년 ${d.m + 1}월 · ${D.SEASON_KO[D.season(d.m)]} · 평균 ${fmt(d.temp, 1)}°C${d.forecast ? ' · 예측' : ''}`;
               },
               // 내용: '1,234 백만㎥'
               label: it => `${fmt(it.raw)} 백만㎥`
@@ -202,7 +232,7 @@
     // ---------------------------------------------------------------
     // bins : [{ label: '-10~-5', value: 일평균 공급량, days: 해당 구간 일수 }, ...] 12개
     //        인덱스 0 = 가장 추운 구간, 11 = 가장 따뜻한 구간
-    const bins = r.tempBins;
+    const bins = stats.tempBins;
 
     // 구간별 막대 색 정하기
     //   9 이상(따뜻함, 18°C 이상)  → 회색 (난방 수요 거의 없음)
@@ -254,8 +284,8 @@
     // ---------------------------------------------------------------
     // 5) 분기별 인구 추이 선 차트
     // ---------------------------------------------------------------
-    // pop : [{ label: '2021 Q1', value: 인구(만 명) }, ...]
-    const pop = r.popQ;
+    // pop : [{ label: '21.Q1', value: 인구(만 명) }, ...]
+    const pop = stats.popQ;
 
     make('pop', $('popChart'), {
       type: 'line',
@@ -292,11 +322,10 @@
     const chg = ((pop[pop.length - 1].value - pop[0].value) / pop[0].value) * 100;
 
     // 증가면 '+' 붙여서 표시 (감소는 숫자에 이미 '-'가 있음)
-    // ⚠️ TODO: '공급량 상관 0.42'는 계산값이 아니라 고정된 숫자.
-    //          지금은 어느 지역을 골라도 0.42로 나오므로, 지역별 실제 상관계수로 바꿔야 함
+    // 공급량 상관계수는 서버가 지역별로 계산해서 보내줌 (예전에는 0.42 로 고정이었음)
     $('popStats').innerHTML =
       `<div><span>기간 변화 </span><b>${chg >= 0 ? '+' : ''}${fmt(chg, 2)}%</b></div>` +
-      `<div><span>공급량 상관 </span><b>0.42</b></div>`;
+      `<div><span>공급량 상관 </span><b>${fmt(stats.popCorr, 2)}</b></div>`;
 
     // 새로 그린 HTML 안의 아이콘 표시 (공통 함수)
     D.icons();
@@ -306,6 +335,17 @@
   // ---------------------------------------------------------------
   // 페이지 처음 열릴 때 실행
   // ---------------------------------------------------------------
-  D.setRegion(regionId);   // 현재 지역 저장
-  render();                // 첫 화면 그리기
+  async function init() {
+    try {
+      await D.loadRegions();          // API ① 지역 목록 받기 (지도·지역 정보에 필요)
+    } catch (err) {
+      D.showError(err, '지역 목록');
+      return;
+    }
+    // ★ 첫 화면의 regionId 정하기: 주소의 ?region=se → 서버가 넘긴 값 → 저장값 → 첫 번째 지역
+    regionId = D.getRegion();
+    D.setRegion(regionId);   // 현재 지역 저장 (주소창에도 ?region= 표시)
+    render();                // 첫 화면 그리기
+  }
+  init();
 })();
