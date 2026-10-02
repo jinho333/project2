@@ -3,7 +3,12 @@
 
 <!-- 해당 파일에 모든 쿼리문을 작성 -->
 <!-- namespace에는 xml파일과 연결할 Mapper interface 파일명을 패키지를 포함하여 적어주세요 -->
-<mapper namespace="mapper">
+<mapper namespace="com.commit.project2.mapper.RegionMapper">
+  <resultMap id="region" type="com.commit.project2.dto.RegionDTO">
+    <id column="REGION_ID" property="regionId"/>
+    <result column="REGION_NAME" property="regionName"/>
+  </resultMap>
+
 	
 </mapper>
 
