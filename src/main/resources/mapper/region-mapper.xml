@@ -14,6 +14,11 @@
     SELECT * FROM REGION
   </select>
 
+  <!--특정 지역 조회 쿼리-->
+  <select id="getRegionName" resultType="String">
+    SELECT REGION_NAME FROM REGION WHERE REGION_ID = #{regionId}
+  </select>
+
   <!--API 1. 지역목록 + 2025년 연간 공급량, 인구(응답 : RegionSummaryDTO / 가장 최근 1년치 자료 = 2025년)-->
   <select id="getRegionSummaries" resultType="com.commit.project2.dto.RegionSummaryDTO">
     SELECT
