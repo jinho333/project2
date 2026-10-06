@@ -14,6 +14,21 @@
     SELECT * FROM REGION
   </select>
 
+  <!--API 1. 지역목록 + 2025년 연간 공급량, 인구(응답 : RegionSummaryDTO / 가장 최근 1년치 자료 = 2025년)-->
+  <select id="getRegionSummaries" resultType="com.commit.project2.dto.RegionSummaryDTO">
+    SELECT
+      r.REGION_ID AS id,
+      r.REGION_NAME AS name,
+      ROUND(SUM(g.SUPPLY) / 1000, 1) AS supply,
+      ROUND((AVG(g.POPULATION) / 10000), 1) AS pop
+    FROM region r
+    INNER JOIN gas_monthly g
+    ON g.REGION_ID = r.REGION_ID
+    AND g.YM LIKE '2025%'
+    WHERE r.REGION_NAME != '전국'
+    GROUP BY r.REGION_ID, r.REGION_NAME
+    ORDER BY r.REGION_ID
+  </select>
 </mapper>
 
 
