@@ -1,12 +1,20 @@
-package com.commit.project2;
+package com.commit.project2.controller;
 
+import com.commit.project2.service.ForecastService;
+import com.commit.project2.service.NationService;
+import com.commit.project2.service.RegionService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
+@RequiredArgsConstructor
 public class DashboardController {
+    private final RegionService regionService;
+    private final NationService nationService;
+    private final ForecastService forecastService;
 
     @GetMapping("/")
     public String home() {

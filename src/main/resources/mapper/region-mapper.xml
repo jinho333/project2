@@ -9,7 +9,11 @@
     <result column="REGION_NAME" property="regionName"/>
   </resultMap>
 
-	
+  <!--지역 조회 쿼리-->
+  <select id="getRegions" resultMap="region">
+    SELECT * FROM REGION
+  </select>
+
 </mapper>
 
 
