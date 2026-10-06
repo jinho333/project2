@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/region")
+@RequestMapping("/regions")
 public class RegionApiController {
   private final RegionService regionService;
 
