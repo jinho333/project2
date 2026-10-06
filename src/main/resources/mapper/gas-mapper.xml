@@ -13,6 +13,8 @@
     <result column="MIN_TEMP" property="minTemp"/>
     <result column="HOUSEHOLD_CNT" property="householdCnt"/>
     <result column="SUPPLY" property="supply"/>
+    <result column="POPULATION" property="population"/>
+
   </resultMap>
 
   <!--지역 페이지에 필요한 쿼리-->
