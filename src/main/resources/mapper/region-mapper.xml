@@ -1,68 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<!-- 해당 파일에 모든 쿼리문을 작성 -->
-<!-- namespace에는 xml파일과 연결할 Mapper interface 파일명을 패키지를 포함하여 적어주세요 -->
+<!--
+  region 파트 SQL 모음
+  namespace 는 반드시 연결될 Mapper 인터페이스의 "패키지 포함 경로" 와 같아야 함.
+  xml 의 <select id="..."> 는 Mapper 인터페이스의 메서드명과 1:1 매칭.
+  resultType  = 1행 → 1 DTO 로 바로 매핑 (프로퍼티명과 컬럼 별칭이 같아야 함)
+  resultMap   = 복잡한 매핑(컬럼명 ↔ 프로퍼티명 수동 지정)
+  #{이름}     = Mapper 쪽 매개변수(@Param) 또는 DTO 프로퍼티를 안전하게 바인딩 (SQL 인젝션 방지)
+-->
 <mapper namespace="com.commit.project2.mapper.RegionMapper">
+
+  <!-- =======================================================
+       [공용] REGION 테이블 매핑
+       ======================================================= -->
   <resultMap id="region" type="com.commit.project2.dto.RegionDTO">
-    <id column="REGION_ID" property="regionId"/>
+    <id     column="REGION_ID"   property="regionId"/>
     <result column="REGION_NAME" property="regionName"/>
   </resultMap>
 
-  <!--지역 조회 쿼리-->
+  <!-- 전체 지역 목록 (전국 포함). ForecastService 에서 id↔name 짝지을 때 사용 -->
   <select id="getRegions" resultMap="region">
     SELECT * FROM REGION
   </select>
 
-  <!--특정 지역 조회 쿼리-->
+  <!-- 특정 지역 이름 1건 -->
   <select id="getRegionName" resultType="String">
     SELECT REGION_NAME FROM REGION WHERE REGION_ID = #{regionId}
   </select>
 
-  <!--API 1. 지역목록 + 2025년 연간 공급량, 인구(응답 : RegionSummaryDTO / 가장 최근 1년치 자료 = 2025년)-->
+
+  <!-- =======================================================
+       [API ①] GET /api/regions
+         응답: RegionSummaryDTO { id, name, supply, pop }
+         - supply : 2025년 공급량 합계. DB(만㎥) ÷ 1000 → 백만㎥
+         - pop    : 2025년 평균 인구. DB(명) ÷ 10000 → 만 명
+         - "전국"은 지도 타일맵에 없는 "집계 행" 이라 제외
+       ======================================================= -->
   <select id="getRegionSummaries" resultType="com.commit.project2.dto.RegionSummaryDTO">
     SELECT
-      r.REGION_ID AS id,
-      r.REGION_NAME AS name,
-      ROUND(SUM(g.SUPPLY) / 1000, 1) AS supply,
-      ROUND((AVG(g.POPULATION) / 10000), 1) AS pop
+      r.REGION_ID                        AS id,
+      r.REGION_NAME                      AS name,
+      ROUND(SUM(g.SUPPLY) / 1000, 1)     AS supply,
+      ROUND(AVG(g.POPULATION) / 10000, 1) AS pop
     FROM region r
     INNER JOIN gas_monthly g
-    ON g.REGION_ID = r.REGION_ID
-    AND g.YM LIKE '2025%'
+      ON g.REGION_ID = r.REGION_ID
+      AND g.YM LIKE '2025%'
     WHERE r.REGION_NAME != '전국'
     GROUP BY r.REGION_ID, r.REGION_NAME
     ORDER BY r.REGION_ID
   </select>
+
+
+  <!-- =======================================================
+       [API ②] 선택 연도의 월별 실적 (MonthDTO 로 바로 매핑)
+         반환 컬럼 == MonthDTO 프로퍼티명 (m / temp / value)
+         - m     : YM 의 월 두 자리를 숫자로 바꾼 뒤 -1  (0=1월 ~ 11=12월)
+         - temp  : 월 평균 기온 (°C)
+         - value : 공급량(만㎥) ÷ 1000 = 백만㎥, 소수 1자리까지
+         - forecast 는 쿼리에서 세팅하지 않음 → Java 기본값 false
+         - 2026 년은 1~6 월만 돌아올 수 있음 → Service 가 7~12 월을 보강(forecast=true)
+       ======================================================= -->
+  <select id="getMonthsByYear" resultType="com.commit.project2.dto.MonthDTO">
+    SELECT
+      CAST(SUBSTR(g.YM, 6, 2) AS UNSIGNED) - 1 AS m,
+      g.AVG_TEMP                               AS temp,
+      ROUND(g.SUPPLY / 1000, 1)                AS value
+    FROM gas_monthly g
+    WHERE g.REGION_ID = #{regionId}
+      AND g.YM LIKE CONCAT(#{year}, '%')
+    ORDER BY g.YM
+  </select>
+
+
+  <!-- =======================================================
+       [API ②] 전체 기간 월별 원본 (분기 집계 + 상관계수 계산용)
+         - 단위는 환산하지 않음 (서비스에서 상관계수 계산 시 단위 불일치가 상관 없고,
+           원본 숫자가 커도 피어슨은 스케일 무관)
+         - 2021-01 ~ 가장 최신월까지 전부 가져옴 (한 지역 ≈ 60여 행)
+       ======================================================= -->
+  <select id="getGasAllMonths" resultType="com.commit.project2.dto.GasDTO">
+    SELECT
+      g.YM         AS ym,
+      g.AVG_TEMP   AS avgTemp,
+      g.POPULATION AS population,
+      g.SUPPLY     AS supply
+    FROM gas_monthly g
+    WHERE g.REGION_ID = #{regionId}
+    ORDER BY g.YM
+  </select>
+
 </mapper>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
