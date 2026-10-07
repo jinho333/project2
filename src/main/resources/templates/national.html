@@ -26,7 +26,7 @@
                     <section class="card">
                         <div class="card-head">
                             <div><div class="eyebrow">Regions</div><h3 class="card-title">지역별 공급 현황</h3><div class="card-sub" id="treemapSub">면적 = 값 · 타일을 클릭하면 지역 상세로 이동</div></div>
-                            <div id="metricTabs" class="tabs"></div>
+                            <div class="metric-switch"><span class="metric-switch-label">색 기준</span><div id="metricTabs" class="tabs"></div></div>
                         </div>
                         <div class="card-body"><div id="treemap" class="treemap"></div><div id="treemapLegend" class="tm-legend"></div></div>
                     </section>
@@ -49,7 +49,7 @@
                     <section class="card">
                         <div class="card-head">
                             <div><div class="eyebrow">Accuracy</div><h3 class="card-title">예측 정확도 낮은 지역</h3><div class="card-sub">최근 12개월 MAPE · 높을수록 오차 큼</div></div>
-                            <div class="head-badges"><span class="badge badge--yellow">임시 데이터</span><span class="badge badge--red" id="badBadge"></span></div>
+                            <div class="head-badges"><span class="badge badge--temp">임시 데이터</span><span class="badge badge--red" id="badBadge"></span></div>
                         </div>
                         <div class="card-body">
                             <div class="chart" style="height:440px"><canvas id="accChart"></canvas></div>

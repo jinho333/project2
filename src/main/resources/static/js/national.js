@@ -92,7 +92,7 @@
 
     // 탭 버튼은 한 번만 만들고 클릭하면 선택 표시만 바꿈 → 흰 배경(슬라이더)이 버튼 사이를 미끄러지듯 이동
     const tabsEl = $('metricTabs');
-    D.renderTabs(tabsEl, [{ id: 'yoy', label: '전년 대비' }, { id: 'percap', label: '1인당' }], metric, m => {
+    D.renderTabs(tabsEl, [{ id: 'yoy', label: '전년 대비 증감률' }, { id: 'percap', label: '1인당 공급량' }], metric, m => {
       if (m === metric) return;
       metric = m;
       syncTabs();
@@ -107,11 +107,12 @@
       slider.style.cssText = `width:${on.offsetWidth}px;height:${on.offsetHeight}px;transform:translate(${on.offsetLeft}px,${on.offsetTop}px)`;
     }
     syncTabs();
+    if (document.fonts) document.fonts.ready.then(syncTabs);   // 웹폰트가 늦게 적용되면 탭 폭이 바뀌므로 다시 맞춤
     requestAnimationFrame(() => tabsEl.classList.add('is-sliding'));   // 처음 위치를 잡을 때는 움직임 없이
 
     const lastPaint = {};   // 지난번에 칠한 칸 색 (탭을 바꿀 때 이전 색에서 새 색으로 이어지게)
     function renderTree(animate) {
-      $('treemapSub').textContent = '크기 = 2025 공급량(백만㎥) · 색 = ' + (metric === 'yoy' ? '전년 대비 증감률' : '1인당 공급량') + ' · 클릭하면 지역 상세로 이동';
+      $('treemapSub').textContent = '크기 = 2025 공급량(백만㎥) · 클릭하면 상세 이동';   // 색 기준은 오른쪽 토글과 아래 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
 
       const data = regions.map(r => {
         const pc = percapOf(r);

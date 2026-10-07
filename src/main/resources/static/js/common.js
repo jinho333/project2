@@ -114,7 +114,7 @@
       ctx.save();
       ctx.setLineDash([4, 3]); ctx.strokeStyle = C('--ink'); ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
-      if (o.label) { ctx.setLineDash([]); ctx.fillStyle = C('--ink'); ctx.font = `600 11px ${C('--font-sans')}`; ctx.textAlign = 'center'; ctx.fillText(o.label, px, top - 6); }
+      if (o.label) { ctx.setLineDash([]); ctx.fillStyle = C('--ink'); ctx.font = `600 12px ${C('--font-sans')}`; ctx.textAlign = 'center'; ctx.fillText(o.label, px, top - 6); }
       ctx.restore();
     }
   };
@@ -124,7 +124,7 @@
     afterDatasetsDraw(chart) {
       const { ctx, data: { datasets: [ds] } } = chart;
       ctx.save();
-      ctx.fillStyle = C('--ink'); ctx.font = `600 11px ${C('--font-sans')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = C('--ink'); ctx.font = `600 12px ${C('--font-sans')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineJoin = 'round';   // 기준선이 글자를 가로질러도 읽히게 흰 테두리
       chart.getDatasetMeta(0).data.forEach((bar, i) => {
         const text = fmt(ds.data[i], 1) + '%';
@@ -180,7 +180,7 @@
         indexAxis: 'y',
         layout: { padding: { top: 18, right: showValue ? 40 : 0 } },
         scales: {
-          x: { max, ticks: { callback: v => v + '%' }, ...(axisTitle && { title: { display: true, text: axisTitle, color: C('--mute'), font: { size: 11 } } }) },
+          x: { max, ticks: { callback: v => v + '%' }, ...(axisTitle && { title: { display: true, text: axisTitle, color: C('--mute'), font: { size: 12 } } }) },
           y: { grid: { display: false }, ticks: { color: C('--ink'), font: { weight: '500', size: 13 } } }
         },
         plugins: { refLine: { value: ref, label: refLabel }, tooltip: { callbacks: { label: i => fmt(i.raw, 1) + '%' } } },
