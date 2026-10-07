@@ -41,24 +41,53 @@
 .scale i{display:inline-block;width:20px;height:8px;border-radius:2px}
 .scale .steps{display:flex;gap:2px}
 
+/* 막대 차트 아래 색 설명 */
+.bar-legend{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--mute)}
+.bar-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
+.bar-legend i:not(:first-child){margin-left:10px}
+/* 카드 제목 줄 오른쪽에 배지를 여러 개 나란히 놓을 때 */
+.head-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+
 /* ===== Treemap ===== */
 /* 트리맵: 각 칸의 위치·크기(left/top/width/height)는 common.js 가 계산해서 style 로 넣음 */
 .treemap{position:relative;width:100%;height:340px}
 .tm-cell{position:absolute;padding:2px;cursor:pointer}
 .tm-inner{width:100%;height:100%;border-radius:4px;padding:8px 10px;overflow:hidden;display:flex;flex-direction:column;gap:2px}
 .tm-inner b{font-weight:700;line-height:1.25;white-space:nowrap}
-.tm-inner span{font-size:12px;font-weight:500;opacity:.85;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tm-inner span{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tm-cell:hover .tm-inner{outline:2px solid var(--ink);outline-offset:-2px}
+/* 전년 대비/1인당 탭: 선택된 탭의 흰 배경(.tab-slider)이 national.js 에서 버튼 사이를 이동 (공용 .tab 모양은 그대로) */
+#metricTabs{position:relative}
+#metricTabs .tab{position:relative;z-index:1;transition:color var(--dur-base) var(--ease-out)}
+#metricTabs .tab.is-active{background:transparent;border-color:transparent}
+#metricTabs .tab-slider{position:absolute;top:0;left:0;z-index:0;box-sizing:border-box;background:var(--surface-card);border:1px solid var(--hairline);border-radius:var(--radius-md);pointer-events:none}
+#metricTabs.is-sliding .tab-slider{transition:transform var(--dur-base) var(--ease-out),width var(--dur-base) var(--ease-out)}
+@media (prefers-reduced-motion:reduce){#metricTabs .tab,#metricTabs.is-sliding .tab-slider{transition:none}}
+/* 트리맵 툴팁: 마우스를 올린 칸의 자세한 값 (글자가 안 들어가는 작은 칸용) */
+.tm-tip{position:absolute;display:none;z-index:5;pointer-events:none;padding:8px 10px;background:var(--surface-dark);color:var(--white);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);font-size:12px;line-height:1.6;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tm-tip b{display:block;font-size:13px;margin-bottom:2px}
+/* 트리맵 색 범례 */
+.tm-legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:var(--mute)}
+.tm-legend i{display:inline-block;width:28px;height:8px;border-radius:2px}
+.tm-legend .tm-legend-note{margin-left:auto}
 
 /* ===== Donut ===== */
-.donut-wrap{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
-.donut{position:relative;width:180px;height:180px;flex:none}
+/* 카드가 좁아 범례가 아래로 내려가면 도넛은 가운데에 놓임 (옆에 나란히 놓일 때는 범례가 남는 폭을 채움) */
+.donut-wrap{display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap}
+.donut{position:relative;width:188px;height:188px;flex:none}
 /* 도넛 가운데 글자 (pointer-events:none → 마우스는 아래 차트로 통과) */
 .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center}
 .donut-center span{font-size:12px;color:var(--mute);font-weight:500}
 .donut-center b{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.5px;font-variant-numeric:tabular-nums}
-.donut-legend{display:grid;grid-template-columns:auto 1fr auto;column-gap:10px;row-gap:6px;font-size:13px;min-width:150px;flex:1;align-items:center}
-.donut-legend b{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+/* 범례: 한 줄(.dl-row)이 하나의 그리드. 호버한 줄은 배경+굵게, 나머지 줄은 흐리게 (도넛 조각과 같이 반응) */
+.donut-legend{display:flex;flex-direction:column;font-size:13px;min-width:150px;flex:1}
+.dl-row{display:grid;grid-template-columns:10px 1fr auto;column-gap:10px;align-items:center;padding:1px 8px;margin:0 -8px;border-radius:var(--radius-md);transition:background var(--dur-fast),opacity var(--dur-fast)}
+.dl-row b{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.dl-name small{display:block;font-size:11px;font-weight:400;color:var(--mute);line-height:1.4}
+.donut-legend.has-active .dl-row{opacity:.45}
+.donut-legend.has-active .dl-row.is-active{opacity:1;background:var(--surface-soft)}
+.dl-row.is-active span,.dl-row.is-active b{font-weight:700;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.dl-row{transition:none}}
 
 /* ===== Heatmap ===== */
 /* 상관계수 표: 칸 개수는 common.js renderHeatmap() 에서 grid-template-columns 로 지정 */
@@ -66,9 +95,15 @@
 .hm-row{display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap}
 .hm-cell{height:44px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}
 .hm-cell:hover{outline:2px solid var(--ink)}
-.hm-col{font-size:11px;font-weight:500;color:var(--mute);text-align:center;padding-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-col{font-size:11px;font-weight:500;color:var(--mute);text-align:center;padding-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 호버한 칸의 행·열 이름 강조 */
+.hm-row.is-active,.hm-col.is-active{font-weight:700;color:var(--ink)}
 .hm-scale{display:flex;align-items:center;gap:8px;margin-top:12px;padding-left:72px;font-size:11px;color:var(--mute)}
 .hm-scale i{display:inline-block;width:22px;height:8px;border-radius:2px}
+.hm-scale .hm-scale-note{margin-left:8px}
+/* 호버한 칸의 상관 강도 안내 (높이 고정 → 글자가 바뀌어도 화면이 흔들리지 않음) */
+.hm-readout{margin-top:10px;padding-left:72px;min-height:20px;font-size:12px;color:var(--mute)}
+.hm-readout b{color:var(--ink);font-weight:700}
 
 /* ===== Simulation preview ===== */
 /* 시뮬레이션 기온 미리보기 (12개월 막대) */

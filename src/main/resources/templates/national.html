@@ -21,17 +21,17 @@
                 <!-- KPI 카드 4개 (#kpis) -->
                 <div class="kpi-grid" id="kpis"></div>
 
-                <!-- 마켓맵(#treemap, 총 공급량/1인당 탭) + 공급 비중 도넛(#donut) -->
+                <!-- 지역별 공급 현황(#treemap: 크기 = 공급량, 색 = 전년 대비/1인당 탭) + 공급 비중 도넛(#donut) -->
                 <div class="grid-wide">
                     <section class="card">
                         <div class="card-head">
-                            <div><div class="eyebrow">Market map</div><h3 class="card-title">지역별 공급량 마켓맵</h3><div class="card-sub">면적 = 값 · 타일을 클릭하면 지역 상세로 이동</div></div>
+                            <div><div class="eyebrow">Regions</div><h3 class="card-title">지역별 공급 현황</h3><div class="card-sub" id="treemapSub">면적 = 값 · 타일을 클릭하면 지역 상세로 이동</div></div>
                             <div id="metricTabs" class="tabs"></div>
                         </div>
-                        <div class="card-body"><div id="treemap" class="treemap"></div></div>
+                        <div class="card-body"><div id="treemap" class="treemap"></div><div id="treemapLegend" class="tm-legend"></div></div>
                     </section>
                     <section class="card">
-                        <div class="card-head"><div><div class="eyebrow">Share</div><h3 class="card-title">지역별 공급 비중</h3><div class="card-sub">2025년 · 상위 7개 지역</div></div></div>
+                        <div class="card-head"><div><div class="eyebrow">Composition</div><h3 class="card-title">권역별 공급 비중</h3><div class="card-sub">2025년 · 17개 시·도를 5개 권역으로 합산</div></div></div>
                         <div class="card-body donut-wrap">
                             <div class="donut"><canvas id="donut"></canvas><div class="donut-center" id="donutCenter"></div></div>
                             <div class="donut-legend" id="donutLegend"></div>
@@ -43,36 +43,29 @@
                 <div class="grid-2">
                     <section class="card">
                         <div class="card-head"><div><div class="eyebrow">Sensitivity</div><h3 class="card-title">지역별 기온 민감도</h3><div class="card-sub">겨울철 기온 1°C 하락 시 공급량 증가율</div></div></div>
-                        <div class="card-body"><div class="chart" style="height:460px"><canvas id="sensChart"></canvas></div></div>
+                        <div class="card-body"><div class="chart" style="height:440px"><canvas id="sensChart"></canvas></div>
+                            <div class="bar-legend"><i style="background:var(--season-winter)"></i>가중 평균 초과<i style="background:var(--seq-2)"></i>가중 평균 이하</div></div>
                     </section>
                     <section class="card">
                         <div class="card-head">
                             <div><div class="eyebrow">Accuracy</div><h3 class="card-title">예측 정확도 낮은 지역</h3><div class="card-sub">최근 12개월 MAPE · 높을수록 오차 큼</div></div>
-                            <span class="badge badge--red" id="badBadge"></span>
+                            <div class="head-badges"><span class="badge badge--yellow">임시 데이터</span><span class="badge badge--red" id="badBadge"></span></div>
                         </div>
                         <div class="card-body">
-                            <div class="chart" style="height:400px"><canvas id="accChart"></canvas></div>
+                            <div class="chart" style="height:440px"><canvas id="accChart"></canvas></div>
                             <div id="accCallout" class="mt-12"></div>
                         </div>
                     </section>
                 </div>
 
-                <!-- 변수 간 상관계수 히트맵(#heatmap)
-                  TODO: 오른쪽 설명 박스의 r 값(0.94, 0.96)은 HTML 에 직접 적은 고정 글자 -->
+                <!-- 변수 간 상관계수 히트맵(#heatmap) + 오른쪽 설명 박스(#corrNotes, r 값은 JS 가 채움) -->
                 <section class="card">
                     <div class="card-head">
-                        <div><div class="eyebrow">Correlation</div><h3 class="card-title">변수 간 상관계수</h3><div class="card-sub">17개 시·도 월별 데이터, 2021–2025 · 피어슨 r</div></div>
-                        <div class="legend">
-                            <span><i class="sw" style="background:var(--div-neg-3)"></i>음의 상관</span>
-                            <span><i class="sw" style="background:var(--div-pos-3)"></i>양의 상관</span>
-                        </div>
+                        <div><div class="eyebrow">Correlation</div><h3 class="card-title">변수 간 상관계수</h3><div class="card-sub" id="corrSub">전국 월별 데이터 · 피어슨 r</div></div>
                     </div>
                     <div class="card-body grid-corr">
                         <div id="heatmap"></div>
-                        <div class="stack-sm">
-                            <div class="callout callout--blue"><i data-lucide="info"></i><div><b>공급량 ↔ 난방도일 r = 0.94</b><div>기온보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.</div></div></div>
-                            <div class="callout callout--purple"><i data-lucide="bookmark"></i><div><b>인구 ↔ 세대수 r = 0.96</b><div>두 변수는 거의 같은 정보를 담아 모델에는 인구만 사용합니다.</div></div></div>
-                        </div>
+                        <div class="stack-sm" id="corrNotes"></div>
                     </div>
                 </section>
             </div>
