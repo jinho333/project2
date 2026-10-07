@@ -12,4 +12,6 @@ public class RegionSummaryDTO {
   private String name; //r.name
   private Double supply; //r.supply (연간 공급량, 백만㎥)
   private Double pop; //r.pop (인구, 만 명)
+  private Double lo;   //r.lo (1월 평균기온) → 시뮬레이션 슬라이더 처음 위치
+  private Double hi;   //r.hi (8월 평균기온)
 }
