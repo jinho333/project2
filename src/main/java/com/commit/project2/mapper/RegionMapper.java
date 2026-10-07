@@ -1,9 +1,6 @@
 package com.commit.project2.mapper;
 
-import com.commit.project2.dto.GasDTO;
-import com.commit.project2.dto.MonthDTO;
-import com.commit.project2.dto.RegionDTO;
-import com.commit.project2.dto.RegionSummaryDTO;
+import com.commit.project2.dto.*;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -25,6 +22,7 @@ import java.util.List;
 @Mapper
 public interface RegionMapper {
 
+  List<TempRangeDTO> getTempRanges();
   /* ============================================================
    * [공용] 지역 테이블 조회
    * ============================================================ */

@@ -1,15 +1,11 @@
 package com.commit.project2.service;
 
-import com.commit.project2.dto.GasDTO;
-import com.commit.project2.dto.MonthDTO;
-import com.commit.project2.dto.PopQDTO;
-import com.commit.project2.dto.RegionStatsDTO;
-import com.commit.project2.dto.RegionSummaryDTO;
-import com.commit.project2.dto.TempBinDTO;
+import com.commit.project2.dto.*;
 import com.commit.project2.mapper.GasMapper;
 import com.commit.project2.mapper.RegionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -23,6 +19,7 @@ public class RegionService {
 
   private final GasMapper gasMapper;        // 현재는 미사용 (다른 파트가 공용 쿼리를 추가하면 쓰게 됨)
   private final RegionMapper regionMapper;  // region 파트 전용 쿼리
+  private final RestClient restClient;      // FastAPI 호출용 (지역 목록의 MAPE 를 받아올 때만 사용)
 
   /* 기온 구간 라벨 — 인덱스 0=가장 추움, 11=가장 따뜻함.
      region.js 의 bins[0]/bins[11] 가정과 반드시 일치해야 함. */
@@ -35,7 +32,39 @@ public class RegionService {
   /*  API ① 지역 목록 + 2025년 연간 공급량, 인구
    *    - 쿼리에서 단위 환산까지 다 하므로 Service 는 그대로 전달*/
   public List<RegionSummaryDTO> getRegionSummaries() {
-    return regionMapper.getRegionSummaries();
+    List<RegionSummaryDTO> list = regionMapper.getRegionSummaries();   // 기존 쿼리 그대로
+
+    // 번호가 같은 지역에 1월·8월 평균기온, 인구 증감률을 넣어줌
+    List<TempRangeDTO> temps = regionMapper.getTempRanges();
+    for (RegionSummaryDTO region : list) {
+      for (TempRangeDTO temp : temps) {
+        if (temp.getId().equals(region.getId())) {
+          region.setLo(temp.getLo());
+          region.setHi(temp.getHi());
+          region.setTrend(temp.getTrend());   // 인구 증감률(%/년)
+        }
+      }
+    }
+
+    // 이름이 같은 지역에 예측 오차율(MAPE)을 넣어줌 — FastAPI 의 GET /mape 에서 받아옴
+    // FastAPI 서버가 꺼져 있어도 지역 목록은 나가야 하므로 try-catch 로 감쌈 (실패하면 mape 만 비어서 나감)
+    try {
+      PyMapeDTO py = restClient.get()
+          .uri("/mape")
+          .retrieve()
+          .body(PyMapeDTO.class);
+
+      for (RegionSummaryDTO region : list) {
+        for (PyMapeItemDTO item : py.getItems()) {
+          if (item.getRegion().equals(region.getName())) {
+            region.setMape(item.getMape());
+          }
+        }
+      }
+    } catch (Exception e) {
+      // FastAPI 가 꺼져 있거나 /mape 주소가 없는 경우 → MAPE 없이 진행
+    }
+    return list;
   }
 
   /* ============================================================
