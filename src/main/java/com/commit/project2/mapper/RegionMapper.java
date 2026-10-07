@@ -22,11 +22,6 @@ import java.util.List;
 @Mapper
 public interface RegionMapper {
 
-  /** 지역별 1월·8월 평균기온 + 인구 증감률(year 평균 인구 ÷ prevYear 평균 인구 - 1).
-   *  @param year     기준 연도 (예: "2025")
-   *  @param prevYear 그 전년도 (예: "2024") */
-  List<TempRangeDTO> getTempRanges(@Param("year") String year,
-                                   @Param("prevYear") String prevYear);
   /* ============================================================
    * [공용] 지역 테이블 조회
    * ============================================================ */
@@ -38,6 +33,13 @@ public interface RegionMapper {
   /** regionId → regionName 변환.
    *  주 용도: ForecastService 가 FastAPI 호출 URL에 지역 이름을 넣을 때 사용. */
   String getRegionName(Long regionId);
+
+  /** 지역별 1월·8월 평균기온 + 인구 증감률(year 평균 인구 ÷ prevYear 평균 인구 - 1).
+   *  API ① 응답 보강용으로 RegionService 가 호출.
+   *  @param year     기준 연도 (예: "2025")
+   *  @param prevYear 그 전년도 (예: "2024") */
+  List<TempRangeDTO> getTempRanges(@Param("year") String year,
+                                   @Param("prevYear") String prevYear);
 
 
   /* ============================================================
