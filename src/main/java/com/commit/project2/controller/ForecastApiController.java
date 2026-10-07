@@ -5,6 +5,7 @@ import com.commit.project2.dto.ForecastSummaryDTO;
 import com.commit.project2.dto.SimulationDTO;
 import com.commit.project2.dto.SimulationReqDTO;
 import com.commit.project2.service.ForecastService;
+import com.commit.project2.service.RegionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,11 +15,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ForecastApiController {
   private final ForecastService forecastService;
+  private final RegionService regionService;   // 지역 번호가 있는지 확인(checkRegion)할 때 사용
 
   // 화면(forecast.js)이 호출하는 주소: /api/regions/1/forecast?horizon=6
   @GetMapping("/api/regions/{regionId}/forecast")
   public ForecastDTO forecast(@PathVariable("regionId") Long regionId,
                               @RequestParam("horizon") int horizon) {
+    regionService.checkRegion(regionId);   // 없는 지역 번호면 여기서 404 (FastAPI 를 부르기 전에 확인)
     return forecastService.getForecast(regionId, horizon);
   }
 
@@ -32,6 +35,7 @@ public class ForecastApiController {
   @PostMapping("/api/regions/{regionId}/simulation")
   public SimulationDTO simulation(@PathVariable("regionId") Long regionId,
                                   @RequestBody SimulationReqDTO reqDTO) {
+    regionService.checkRegion(regionId);   // 없는 지역 번호면 여기서 404 (FastAPI 를 부르기 전에 확인)
     return forecastService.getSimulation(regionId, reqDTO);
   }
 }

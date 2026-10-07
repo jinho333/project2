@@ -28,8 +28,6 @@
     <a class="nav-item" th:href="@{/national}" th:classappend="${active == 'national'} ? 'is-active'"><i data-lucide="layout-grid"></i><span>전국 통계</span></a>
     <div class="sidebar-section">예측</div>
     <a class="nav-item" th:href="@{/forecast}" th:classappend="${active == 'forecast'} ? 'is-active'"><i data-lucide="trending-up"></i><span>공급 예측</span></a>
-    <!-- TODO: 모델 버전·갱신일은 지금 고정 글자. 실제 값으로 바꿀 것 -->
-    <div class="sidebar-foot"><b>모델 v2.3</b>실적 기준 2026.06<br>다음 갱신 2026.10.05</div>
 </aside>
 
 <!-- [topbar] 검색창(#regionSearch)의 Enter 동작은 common.js 에서 처리 -->
@@ -47,8 +45,8 @@
 <th:block th:fragment="scripts">
     <!-- 서버(Model) 값을 JS 변수로 넘김
       CTX            : 앱 기본 경로 ('/') → JS 에서 D.url('api/...') 로 API 주소를 만들 때 앞에 붙음
-      INITIAL_REGION : ★ 컨트롤러가 넘긴 regionId (/region?region=se 로 들어오면 'se')
-                       JS 의 D.getRegion() 이 이 값을 읽어서 API 주소(/api/regions/se/...)에 넣음 -->
+      INITIAL_REGION : ★ 컨트롤러가 넘긴 regionId (/region?region=3 으로 들어오면 '3')
+                       JS 의 D.getRegion() 이 이 값을 읽어서 API 주소(/api/regions/3/...)에 넣음 -->
     <script th:inline="javascript">
         window.CTX = /*[[@{/}]]*/ '/';
         window.INITIAL_REGION = /*[[${regionId}]]*/ null;

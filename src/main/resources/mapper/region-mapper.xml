@@ -20,34 +20,51 @@
   </resultMap>
 
   <!-- 전체 지역 목록 (전국 포함). ForecastService 에서 id↔name 짝지을 때 사용 -->
+  <!-- SELECT * 대신 필요한 컬럼만 적음 (테이블에 컬럼이 추가돼도 결과가 달라지지 않음) -->
+  <!-- 테이블 이름은 소문자로 통일 (리눅스의 MariaDB 는 대소문자를 구분해서 REGION 을 못 찾을 수 있음) -->
   <select id="getRegions" resultMap="region">
-    SELECT * FROM REGION
+    SELECT REGION_ID, REGION_NAME FROM region
   </select>
 
   <!-- 특정 지역 이름 1건 -->
   <select id="getRegionName" resultType="String">
-    SELECT REGION_NAME FROM REGION WHERE REGION_ID = #{regionId}
+    SELECT REGION_NAME FROM region WHERE REGION_ID = #{regionId}
   </select>
 
-  <!-- 지역별 1월·8월 평균기온 (시뮬레이션 슬라이더 기본값) -->
+  <!-- 지역별 1월·8월 평균기온 (시뮬레이션 슬라이더 기본값) + 인구 증감률(trend, %/년) -->
+  <!-- REGION_ID 18 = '전국'(집계 행) 이라 제외. 17개 시·도만 돌려줌 -->
+  <!-- trend = 기준 연도(#{year}) 평균 인구 ÷ 그 전년도(#{prevYear}) 평균 인구 - 1
+       연도는 쿼리에 직접 적지 않고 RegionService 가 넘겨줌 (12개월이 모두 있는 가장 최근 연도) -->
   <select id="getTempRanges" resultType="com.commit.project2.dto.TempRangeDTO">
     SELECT
     REGION_ID AS id,
     AVG(CASE WHEN YM LIKE '%-01' THEN AVG_TEMP END) AS lo,
     AVG(CASE WHEN YM LIKE '%-08' THEN AVG_TEMP END) AS hi,
-    ROUND((AVG(CASE WHEN YM LIKE '2025%' THEN POPULATION END)
-         / AVG(CASE WHEN YM LIKE '2024%' THEN POPULATION END) - 1) * 100, 1) AS trend
+    ROUND((AVG(CASE WHEN YM LIKE CONCAT(#{year}, '%') THEN POPULATION END)
+         / AVG(CASE WHEN YM LIKE CONCAT(#{prevYear}, '%') THEN POPULATION END) - 1) * 100, 1) AS trend
     FROM gas_monthly
+    WHERE REGION_ID &lt; 18
     GROUP BY REGION_ID
+  </select>
+
+
+  <!-- 데이터가 있는 연도 목록 (오름차순). 예) 2021, 2022, ..., 2026
+       지역 상세 페이지의 연도 버튼을 만들 때 사용 → 연도를 JS 에 직접 적지 않아도 됨 -->
+  <select id="getYears" resultType="int">
+    SELECT DISTINCT CAST(LEFT(YM, 4) AS UNSIGNED) AS y
+    FROM gas_monthly
+    ORDER BY y
   </select>
 
 
   <!-- =======================================================
        [API ①] GET /api/regions
          응답: RegionSummaryDTO { id, name, supply, pop }
-         - supply : 2025년 공급량 합계. DB(만㎥) ÷ 1000 → 백만㎥
-         - pop    : 2025년 평균 인구. DB(명) ÷ 10000 → 만 명
-         - "전국"은 지도 타일맵에 없는 "집계 행" 이라 제외
+         - 기준 연도(#{year})는 RegionService 가 넘겨줌 = 12개월이 모두 있는 가장 최근 연도 (지금 데이터로는 2025)
+           → 예전에는 '2025%' 로 고정이었음. 2026년 데이터가 12월까지 채워지면 자동으로 2026 기준이 됨
+         - supply : 기준 연도 공급량 합계. DB(천㎥) ÷ 1000 → 백만㎥
+         - pop    : 기준 연도 평균 인구. DB(명) ÷ 10000 → 만 명
+         - "전국"(REGION_ID 18)은 지도 타일맵에 없는 "집계 행" 이라 제외
        ======================================================= -->
   <select id="getRegionSummaries" resultType="com.commit.project2.dto.RegionSummaryDTO">
     SELECT
@@ -58,7 +75,7 @@
     FROM region r
     INNER JOIN gas_monthly g
       ON g.REGION_ID = r.REGION_ID
-      AND g.YM LIKE '2025%'
+      AND g.YM LIKE CONCAT(#{year}, '%')
     WHERE r.REGION_NAME != '전국'
     GROUP BY r.REGION_ID, r.REGION_NAME
     ORDER BY r.REGION_ID
@@ -70,7 +87,7 @@
          반환 컬럼 == MonthDTO 프로퍼티명 (m / temp / value)
          - m     : YM 의 월 두 자리를 숫자로 바꾼 뒤 -1  (0=1월 ~ 11=12월)
          - temp  : 월 평균 기온 (°C)
-         - value : 공급량(만㎥) ÷ 1000 = 백만㎥, 소수 1자리까지
+         - value : 공급량(천㎥) ÷ 1000 = 백만㎥, 소수 1자리까지
          - forecast 는 쿼리에서 세팅하지 않음 → Java 기본값 false
          - 2026 년은 1~6 월만 돌아올 수 있음 → Service 가 7~12 월을 보강(forecast=true)
        ======================================================= -->

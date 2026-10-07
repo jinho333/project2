@@ -44,7 +44,9 @@
 
   // 현재 화면 상태
   let regionId = null;   // 선택된 지역 id (지역 목록을 받은 뒤 init() 에서 정함)
-  let year = 2025;       // 선택된 연도 (기본값 2025)
+  let year = null;       // 선택된 연도 (init() 에서 서버가 알려준 기준 연도로 정함)
+  let years = [];        // 연도 버튼에 보여줄 연도 목록 (서버에서 받음)  예) [2021, ..., 2026]
+  let baseYear = null;   // 기준 연도 = 12개월이 모두 있는 가장 최근 연도  예) 2025
 
   // 만들어진 차트들을 보관하는 곳 { monthly: 차트, temp: 차트, pop: 차트 }
   const charts = {};
@@ -87,11 +89,11 @@
     // 지역 기본 정보 박스
     D.renderRegionInfo($('regionInfo'), r);
 
-    // 연도 선택 버튼 (2021, 2022, ... 2026)
-    // 2026년은 아직 끝나지 않은 해라서 '2026 (진행)'으로 표시
+    // 연도 선택 버튼 (2021, 2022, ... 2026) — 연도 목록은 서버에서 받은 years
+    // 기준 연도보다 큰 연도(아직 끝나지 않은 해)는 '2026 (진행)'처럼 표시
     D.renderPills(
       $('yearPills'),
-      D.YEARS.map(y => ({ id: y, label: y === 2026 ? '2026 (진행)' : String(y) })),
+      years.map(y => ({ id: y, label: y > baseYear ? `${y} (진행)` : String(y) })),
       year,                                   // 현재 선택된 연도
       y => { year = y; render(); }            // 버튼 클릭 시: 연도 변경 → 다시 그리기
     );
@@ -105,7 +107,7 @@
     try {
       // ★ regionId 를 URL 에 넣는 곳
       //   `...${regionId}...` : 백틱(`) 문자열 안에 변수 값을 끼워 넣는 문법 (템플릿 문자열)
-      //   regionId 가 'se' 이면 → '/api/regions/se/stats?year=2025' 로 요청됨
+      //   regionId 가 3 이면 → '/api/regions/3/stats?year=2025' 로 요청됨
       //   params: { year } → 주소 뒤에 ?year=2025 를 자동으로 붙여줌
       //   Spring 에서는 @GetMapping("/api/regions/{regionId}/stats") + @PathVariable, @RequestParam 으로 받으면 됨
       const res = await axios.get(D.url(`api/regions/${regionId}/stats`), { params: { year } });
@@ -149,8 +151,8 @@
     // 공급량이 가장 많은 달 찾기 (최댓값 찾기)
     const peak = months.reduce((a, d) => (d.value > a.value ? d : a));
 
-    // 2026년은 실적 + 예측이 섞여 있음
-    const partial = year === 2026;
+    // 기준 연도보다 뒤의 해(지금은 2026년)는 실적 + 예측이 섞여 있음
+    const partial = year > baseYear;
 
     // KPI 카드 4개를 HTML 문자열로 만들어서 한 번에 넣기
     // D.kpi({...}) 는 카드 1개의 HTML을 만들어주는 공통 함수, join('')으로 이어 붙임
@@ -188,7 +190,7 @@
     // ---------------------------------------------------------------
     $('monthlyTitle').textContent = `${year}년 월별 공급량`;
 
-    // 예측 범례('연한 색 = 예측')는 2026년일 때만 보여줌
+    // 예측 범례('연한 색 = 예측')는 진행 중인 해(지금은 2026년)일 때만 보여줌
     $('legendForecast').hidden = !partial;
 
     make('monthly', $('monthlyChart'), {
@@ -342,7 +344,17 @@
       D.showError(err, '지역 목록');
       return;
     }
-    // ★ 첫 화면의 regionId 정하기: 주소의 ?region=se → 서버가 넘긴 값 → 저장값 → 첫 번째 지역
+    // 연도 목록과 기준 연도 받기 (연도 버튼에 필요) — 예전에는 2025, 2026 이 코드에 적혀 있었음
+    try {
+      const info = await D.loadYears();   // { years: [2021, ..., 2026], baseYear: 2025 }
+      years = info.years;
+      baseYear = info.baseYear;
+      year = baseYear;                    // 처음에는 기준 연도를 선택
+    } catch (err) {
+      D.showError(err, '연도 목록');
+      return;
+    }
+    // ★ 첫 화면의 regionId 정하기: 주소의 ?region=3 → 서버가 넘긴 값 → 저장값 → 첫 번째 지역
     regionId = D.getRegion();
     D.setRegion(regionId);   // 현재 지역 저장 (주소창에도 ?region= 표시)
     render();                // 첫 화면 그리기

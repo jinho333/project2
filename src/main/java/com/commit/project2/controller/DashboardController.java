@@ -21,7 +21,7 @@ public class DashboardController {
         return "redirect:/region";
     }
 
-    /** 지역 상세 통계 — ?region=se 로 초기 선택 지역 지정 가능 */
+    /** 지역 상세 통계 — ?region=3 으로 초기 선택 지역 지정 가능 */
     @GetMapping("/region")
     public String region(@RequestParam(required = false) String region, Model model) {
         model.addAttribute("regionId", region);
