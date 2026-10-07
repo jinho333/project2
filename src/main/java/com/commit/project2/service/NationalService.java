@@ -3,10 +3,13 @@ package com.commit.project2.service;
 import com.commit.project2.dto.GasDTO;
 import com.commit.project2.dto.NationalDTO;
 import com.commit.project2.dto.NationalRegionDTO;
+import com.commit.project2.dto.PyMapeDTO;
+import com.commit.project2.dto.PyMapeItemDTO;
 import com.commit.project2.mapper.GasMapper;
 import com.commit.project2.util.StatUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -23,6 +26,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class NationalService {
   private final GasMapper gasMapper;
+  private final RestClient restClient;   // FastAPI 호출용 (예측 오차 MAPE 를 받아올 때 사용)
 
   private static final String YEAR = "2025";       // 기준 연도 (가장 최근 1년치 자료)
   private static final String PREV_YEAR = "2024";  // 전년 대비 비교 연도
@@ -39,18 +43,42 @@ public class NationalService {
       "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"
   };
 
-  // TODO 예측 모델 연동 전까지 임시값
-  private static final double[] MOCK_MAPE = {0, 4.3, 6.1, 5.9, 5.8, 5.4, 5.6, 8.6,10.1, 5.1, 9.2, 6.9, 7.4, 6.4, 7.8, 7.1, 6.7,12.4};
+  /* ---------- 예측 오차(MAPE): FastAPI 의 실제 값 ---------- */
+
+  // FastAPI 의 GET /mape 호출 → { items: [{ region, mape }], delta }
+  // FastAPI 서버가 꺼져 있어도 전국 페이지의 나머지는 나와야 하므로 실패하면 null 을 돌려줌
+  private PyMapeDTO fetchMape() {
+    try {
+      return restClient.get()
+          .uri("/mape")
+          .retrieve()
+          .body(PyMapeDTO.class);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  // 받아온 MAPE 목록에서 지역 이름이 같은 값 찾기 (못 받아왔거나 그 지역이 없으면 null)
+  private Double findMape(PyMapeDTO py, String regionName) {
+    if (py == null || py.getItems() == null) return null;
+    for (PyMapeItemDTO item : py.getItems()) {
+      if (item.getRegion().equals(regionName)) {
+        return item.getMape();
+      }
+    }
+    return null;
+  }
 
   /* ---------- 전국 요약 ---------- */
 
   // GET /api/national 응답 만들기
   public NationalDTO getNationalSummary() {
     List<GasDTO> monthly = gasMapper.getNationalMonthly();
+    PyMapeDTO py = fetchMape();
 
     return NationalDTO.builder()
         .supplyYoy(getSupplyYoy())
-        .mapeDelta(-0.8)  // TODO 예측 모델 연동 전까지 임시값
+        .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
         .corr(getCorrMatrix(monthly))
         .corrPeriod(getPeriod(monthly))
@@ -116,6 +144,8 @@ public class NationalService {
     Map<Long, Double> prevSupply = gasMapper.getRegionAnnualStats(PREV_YEAR).stream()
         .collect(Collectors.toMap(GasDTO::getRegionId, GasDTO::getSupply));
 
+    PyMapeDTO py = fetchMape();   // 지역별 예측 오차 (FastAPI)
+
     List<NationalRegionDTO> result = new ArrayList<>();
     for (GasDTO row : gasMapper.getRegionAnnualStats(YEAR)) {
       int regionId = row.getRegionId().intValue();
@@ -130,7 +160,7 @@ public class NationalService {
           .supplyYoy(calcYoy(row.getSupply(), prevSupply.get(row.getRegionId())))
           .pop(StatUtils.round(row.getPopulation() / 10000.0, 1))    // 명 -> 만 명
           .sensitivity(getSensitivity(monthly))
-          .mape(MOCK_MAPE[regionId])
+          .mape(findMape(py, REGION_NAMES[regionId]))   // FastAPI 모델의 실제 오차율(%)
           .trend(getPopulationTrend(monthly))
           .lo(getAvgTemp(monthly, "-01"))
           .hi(getAvgTemp(monthly, "-08"))
