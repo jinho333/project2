@@ -40,7 +40,8 @@
  *
  *   ③ GET  /api/national
  *        → { supplyYoy: 1.9, mapeDelta: -0.8,
- *            corrLabels: ['공급량','평균기온',...], corr: [[1,-0.91,...], ...] }
+ *            corrLabels: ['공급량','평균기온',...], corr: [[1,-0.91,...], ...],
+ *            corrPeriod: '2021-01 ~ 2026-06' }   (상관계수 계산에 쓴 기간)
  *        사용: national.js
  *
  *   ④ GET  /api/forecast/summary?horizon=6
@@ -117,6 +118,22 @@
       ctx.restore();
     }
   };
+  // 막대 끝 값 표시 (hbar 에서 showValue 를 켠 차트에만 plugins 로 넣어 씀 → 전체 등록은 안 함)
+  const valueLabel = {
+    id: 'valueLabel',
+    afterDatasetsDraw(chart) {
+      const { ctx, data: { datasets: [ds] } } = chart;
+      ctx.save();
+      ctx.fillStyle = C('--ink'); ctx.font = `600 11px ${C('--font-sans')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineJoin = 'round';   // 기준선이 글자를 가로질러도 읽히게 흰 테두리
+      chart.getDatasetMeta(0).data.forEach((bar, i) => {
+        const text = fmt(ds.data[i], 1) + '%';
+        ctx.strokeText(text, bar.x + 6, bar.y);
+        ctx.fillText(text, bar.x + 6, bar.y);
+      });
+      ctx.restore();
+    }
+  };
   // 실적/예측 경계 음영
   const split = {
     id: 'split',
@@ -153,15 +170,17 @@
 
   // 가로 막대 차트 (전국 통계: 기온 민감도, 예측 정확도)
   //   data: [{ id, label, value, color }], ref: 기준선 값, onClick: 막대 클릭 시 실행할 함수
-  function hbar(canvas, data, { max, ref, refLabel, onClick } = {}) {
+  //   showValue: 막대 끝에 값 표시, axisTitle: 아래쪽 축 제목 (둘 다 안 주면 예전 모양 그대로)
+  function hbar(canvas, data, { max, ref, refLabel, onClick, showValue = false, axisTitle } = {}) {
     return new Chart(canvas, {
       type: 'bar',
       data: { labels: data.map(d => d.label), datasets: [{ data: data.map(d => d.value), backgroundColor: data.map(d => d.color), borderRadius: 3, barThickness: 12 }] },
+      plugins: showValue ? [valueLabel] : [],
       options: {
         indexAxis: 'y',
-        layout: { padding: { top: 18 } },
+        layout: { padding: { top: 18, right: showValue ? 40 : 0 } },
         scales: {
-          x: { max, ticks: { callback: v => v + '%' } },
+          x: { max, ticks: { callback: v => v + '%' }, ...(axisTitle && { title: { display: true, text: axisTitle, color: C('--mute'), font: { size: 11 } } }) },
           y: { grid: { display: false }, ticks: { color: C('--ink'), font: { weight: '500', size: 13 } } }
         },
         plugins: { refLine: { value: ref, label: refLabel }, tooltip: { callbacks: { label: i => fmt(i.raw, 1) + '%' } } },
@@ -330,36 +349,92 @@
     }
     return out;
   }
-  // 트리맵 그리기: 칸이 작으면 글자를 줄이거나 생략
+  // 트리맵 그리기: 칸 크기 = value. 칸이 작으면 글자를 줄이거나 생략하고, 모든 칸은 마우스를 올리면 툴팁으로 안내
+  //   큰 칸: 이름 + '값 · note' / 좁은 칸: 이름 + note 만 / 아주 작은 칸: 글자 없음(툴팁만)
+  //   data 항목: { id, label, value } + 선택 항목
+  //     color / ink : 칸 배경색 / 글자색 (없으면 value 크기에 따른 파랑 농도)
+  //     note        : 값 옆에 붙일 글자 (없으면 전체 대비 %)
+  //     tip         : 툴팁에 넣을 HTML (없으면 이름 + 값)
   function renderTreemap(el, data, { unit = '', onSelect } = {}) {
     const w = el.clientWidth, h = el.clientHeight;
     const sorted = [...data].sort((a, b) => b.value - a.value);
     const mx = sorted[0].value, mn = sorted[sorted.length - 1].value;
     const total = data.reduce((s, d) => s + d.value, 0);
-    el.innerHTML = squarify(sorted, 0, 0, w, h).map(r => {
+    const rects = squarify(sorted, 0, 0, w, h);
+    el.innerHTML = rects.map((r, i) => {
       const t = (r.value - mn) / (mx - mn || 1);
       const big = r.w > 140 && r.h > 70;
-      return `<div class="tm-cell" data-id="${r.id}" title="${r.label} ${fmt(r.value)}${unit}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">
-        <div class="tm-inner" style="background:${seq(t)};color:${seqInk(t)};${r.w > 60 && r.h > 36 ? '' : 'padding:2px'}">
+      const note = r.note !== undefined ? r.note : `${fmt((r.value / total) * 100, 1)}%`;
+      return `<div class="tm-cell" data-id="${r.id}" data-i="${i}" aria-label="${r.label} ${fmt(r.value)}${unit}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">
+        <div class="tm-inner" style="background:${r.color || seq(t)};color:${r.ink || seqInk(t)};${r.w > 60 && r.h > 36 ? '' : 'padding:2px'}">
           ${r.w > 44 && r.h > 22 ? `<b style="font-size:${big ? 15 : 12}px">${r.label}</b>` : ''}
-          ${r.w > 60 && r.h > 44 ? `<span>${fmt(r.value)}${unit} · ${fmt((r.value / total) * 100, 1)}%</span>` : ''}
+          ${r.w > 72 && r.h > 44 ? `<span>${r.w > 96 ? `${fmt(r.value)}${unit} · ${note}` : note}</span>` : ''}
         </div></div>`;
     }).join('');
+
+    // 툴팁: 글자가 안 들어가는 작은 칸도 같은 정보를 볼 수 있게 함
+    const tip = document.createElement('div');
+    tip.className = 'tm-tip';
+    el.appendChild(tip);
+    el.querySelectorAll('.tm-cell').forEach(c => {
+      const r = rects[c.dataset.i];
+      c.onmouseenter = () => { tip.innerHTML = r.tip || `<b>${r.label}</b>${fmt(r.value)}${unit}`; tip.style.display = 'block'; };
+      c.onmousemove = e => {
+        const b = el.getBoundingClientRect();
+        let x = e.clientX - b.left + 14, y = e.clientY - b.top + 14;
+        if (x + tip.offsetWidth > b.width) x = e.clientX - b.left - tip.offsetWidth - 14;   // 오른쪽 끝이면 왼쪽에 표시
+        if (y + tip.offsetHeight > b.height) y = e.clientY - b.top - tip.offsetHeight - 14; // 아래쪽 끝이면 위쪽에 표시
+        tip.style.left = Math.max(0, x) + 'px';
+        tip.style.top = Math.max(0, y) + 'px';
+      };
+      c.onmouseleave = () => { tip.style.display = 'none'; };
+    });
     if (onSelect) el.querySelectorAll('.tm-cell').forEach(c => { c.onclick = () => onSelect(c.dataset.id); });
   }
 
   /* ---------- 상관계수 히트맵 ---------- */
-  // labels: 변수 이름 배열, M: 상관계수 2차원 배열 → 색칠된 표 HTML
-  function renderHeatmap(el, labels, M) {
-    const n = labels.length;
-    let h = `<div class="hm" style="grid-template-columns:72px repeat(${n},minmax(34px,1fr))">`;
-    M.forEach((row, r) => {
-      h += `<div class="hm-row">${labels[r]}</div>`;
-      row.forEach((v, c) => { h += `<div class="hm-cell" title="${labels[r]} × ${labels[c]}: ${v.toFixed(2)}" style="background:${divColor(v)};color:${Math.abs(v) >= 0.55 ? '#fff' : 'var(--ink)'}">${v.toFixed(2)}</div>`; });
+  // 상관계수 크기를 말로 풀어줌 (예: 0.98 → '매우 강한 양의 상관')
+  const corrStrength = v => {
+    const a = Math.abs(v);
+    const level = a >= 0.8 ? '매우 강한' : a >= 0.6 ? '강한' : a >= 0.4 ? '보통' : a >= 0.2 ? '약한' : null;
+    return level ? `${level} ${v > 0 ? '양' : '음'}의 상관` : '거의 상관 없음';
+  };
+  // labels: 변수 이름 배열, M: 상관계수 2차원 배열 → 색칠된 표 HTML (열 이름은 맨 위)
+  //   lower: true 면 아래쪽 삼각형만 그림 (대각선=자기 자신 1.00 과 대칭으로 겹치는 칸은 정보가 없어서 생략)
+  //   글자색: 가장 진한 두 단계(|r| ≥ 0.83)만 흰색, 나머지는 검정 (연한 배경에서 흰 글씨는 대비 부족)
+  //   칸에 마우스를 올리면 해당 행·열 이름이 굵어지고, 아래 한 줄 안내에 강도가 표시됨
+  function renderHeatmap(el, labels, M, { lower = false } = {}) {
+    const all = labels.map((_, i) => i);
+    const rowIdx = lower ? all.slice(1) : all;       // lower 면 첫 변수는 행에서, 마지막 변수는 열에서 뺌
+    const colIdx = lower ? all.slice(0, -1) : all;
+    const HINT = '칸에 마우스를 올리면 상관의 강도를 설명합니다';
+
+    let h = `<div class="hm" style="grid-template-columns:72px repeat(${colIdx.length},minmax(34px,1fr))">`;
+    h += '<div></div>' + colIdx.map(c => `<div class="hm-col" data-c="${c}">${labels[c]}</div>`).join('');
+    rowIdx.forEach(r => {
+      h += `<div class="hm-row" data-r="${r}">${labels[r]}</div>`;
+      colIdx.forEach(c => {
+        if (lower && c >= r) { h += '<div></div>'; return; }   // 위쪽 삼각형과 대각선은 빈칸
+        const v = M[r][c];
+        h += `<div class="hm-cell" data-r="${r}" data-c="${c}" aria-label="${labels[r]} 와 ${labels[c]}: ${v.toFixed(2)}" style="background:${divColor(v)};color:${Math.abs(v) >= 0.83 ? '#fff' : 'var(--ink)'}">${v.toFixed(2)}</div>`;
+      });
     });
-    h += '<div></div>' + labels.map(l => `<div class="hm-col">${l}</div>`).join('') + '</div>';
-    h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span></div>`;
+    h += '</div>';
+    h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 빨강 양 / 파랑 음</span></div>`;
+    h += `<div class="hm-readout">${HINT}</div>`;
     el.innerHTML = h;
+
+    const readout = el.querySelector('.hm-readout');
+    const mark = (r, c, on) => {
+      const rowLabel = el.querySelector(`.hm-row[data-r="${r}"]`), colLabel = el.querySelector(`.hm-col[data-c="${c}"]`);
+      if (rowLabel) rowLabel.classList.toggle('is-active', on);
+      if (colLabel) colLabel.classList.toggle('is-active', on);
+    };
+    el.querySelectorAll('.hm-cell').forEach(cell => {
+      const r = +cell.dataset.r, c = +cell.dataset.c, v = M[r][c];
+      cell.onmouseenter = () => { mark(r, c, true); readout.innerHTML = `<b>${labels[r]} ↔ ${labels[c]}</b> r = ${v.toFixed(2)} · ${corrStrength(v)}`; };
+      cell.onmouseleave = () => { mark(r, c, false); readout.textContent = HINT; };
+    });
   }
 
   /* ---------- 상단 지역 검색 ---------- */
