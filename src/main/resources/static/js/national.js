@@ -1,6 +1,6 @@
 /* =====================================================================
  * national.js — 전국 통계 페이지
- * 화면: KPI 4개 → 지역별 공급 현황(트리맵) + 공급 비중 도넛 → 기온 민감도 / 예측 정확도 막대 → 상관계수 히트맵
+ * 화면: KPI 4개 → 지역별 공급 현황(트리맵) + 공급 비중 도넛 → 연도별 추이 → 기온 민감도 / 예측 오차 막대 → 상관계수 히트맵 → 데이터 안내
  * 지역 선택 상태가 없어서 render() 없이 위에서 아래로 한 번만 그림
  * (트리맵만 탭 변경·창 크기 변경 때 다시 그림)
  *
@@ -244,6 +244,74 @@
 
     // 상관계수 (서버가 보내준 변수 이름 + 2차원 배열)
     // lower: 대각선(자기 자신)과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
+    // 연도별 추이: 막대 = 연간 공급량, 선 = 평균기온 (서버가 12개월이 모두 있는 연도만 보내줌)
+    const annual = national.annual || [];
+    if (!annual.length) {
+      $('trendCard').style.display = 'none';
+    } else {
+      $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 막대 = 연간 공급량(백만㎥) · 선 = 평균기온(°C)`;
+      const supplies = annual.map(a => a.supply), temps = annual.map(a => a.avgTemp);
+      // 막대는 위쪽 65% 아래, 기온 선은 그 위쪽에 놓이도록 두 축의 범위를 잡음 (서로 겹쳐 글자가 가려지지 않게)
+      const supplyMax = Math.ceil(Math.max(...supplies) / 0.65 / 2000) * 2000;
+      const tempMin = Math.floor(Math.min(...temps)) - 9, tempMax = Math.ceil(Math.max(...temps)) + 1;
+      // 막대 위에 값 표시 (Chart.js 에 값 표시 기능이 없어서 직접 그림)
+      const barValues = {
+        id: 'barValues',
+        afterDatasetsDraw(chart) {
+          const { ctx } = chart;
+          ctx.save();
+          ctx.fillStyle = C('--ink'); ctx.font = `600 12px ${C('--font-sans')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          chart.getDatasetMeta(0).data.forEach((bar, i) => ctx.fillText(fmt(annual[i].supply), bar.x, bar.y - 4));
+          ctx.restore();
+        }
+      };
+      const axisTitle = text => ({ display: true, text, color: C('--mute'), font: { size: 12 } });
+      new Chart($('trendChart'), {
+        data: {
+          labels: annual.map(a => `${a.year}년`),
+          datasets: [
+            { type: 'bar', label: '연간 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, maxBarThickness: 56,
+              backgroundColor: annual.map(a => a.year === year ? C('--seq-5') : C('--seq-3')) },
+            { type: 'line', label: '평균기온', data: temps, yAxisID: 'y1', borderColor: C('--yellow-600'), backgroundColor: C('--yellow-600'), borderWidth: 2, pointRadius: 4, tension: 0 }
+          ]
+        },
+        plugins: [barValues],
+        options: {
+          layout: { padding: { top: 8 } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { min: 0, max: supplyMax, ticks: { callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
+            y1: { position: 'right', min: tempMin, max: tempMax, grid: { drawOnChartArea: false }, ticks: { callback: v => v + '°' }, title: axisTitle('평균기온 (°C)') }
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: i => {
+                  const a = annual[i.dataIndex];
+                  return i.dataset.type === 'line' ? `평균기온 ${fmt(a.avgTemp, 1)}°C`
+                    : `공급량 ${fmt(a.supply, 1)} 백만㎥` + (a.supplyYoy !== null && a.supplyYoy !== undefined ? ` (전년 대비 ${signed(a.supplyYoy)}%)` : '');
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // 오른쪽 설명 박스: 숫자와 문장을 데이터에서 만듦
+      const hi = annual.reduce((a, b) => (b.supply > a.supply ? b : a));
+      const lo = annual.reduce((a, b) => (b.supply < a.supply ? b : a));
+      const warm = annual.reduce((a, b) => (b.avgTemp > a.avgTemp ? b : a));
+      const trendNotes = [];
+      if (warm.year === lo.year) {
+        trendNotes.push(D.callout('blue', `${warm.year}년: 가장 따뜻하고 공급량은 가장 적음`,
+          `평균기온 ${fmt(warm.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lo.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 같은 방향입니다.`));
+      }
+      trendNotes.push(D.callout('purple', '공급량 범위',
+        `가장 많은 해 ${hi.year}년 ${fmt(hi.supply)}백만㎥, 가장 적은 해 ${lo.year}년 ${fmt(lo.supply)}백만㎥`));
+      trendNotes.push(D.callout('blue', '참고', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
+      $('trendNotes').innerHTML = trendNotes.join('');
+    }
+
     D.renderHeatmap($('heatmap'), national.corrLabels, national.corr, { lower: true });
     $('corrSub').textContent = `전국 월별 데이터${national.corrPeriod ? ', ' + national.corrPeriod : ''} · 계절 변동 포함 · 피어슨 r`;
 

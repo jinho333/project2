@@ -39,6 +39,20 @@
                     </section>
                 </div>
 
+                <!-- 연도별 추이: 막대 = 연간 공급량, 선 = 평균기온 (#trendChart) + 오른쪽 설명 박스(#trendNotes, 값은 JS 가 채움) -->
+                <section class="card" id="trendCard">
+                    <div class="card-head">
+                        <div><div class="eyebrow">Trend</div><h3 class="card-title">연도별 공급량과 평균기온</h3><div class="card-sub" id="trendSub">막대 = 연간 공급량(백만㎥) · 선 = 평균기온(°C)</div></div>
+                    </div>
+                    <div class="card-body grid-corr">
+                        <div>
+                            <div class="chart" style="height:300px"><canvas id="trendChart"></canvas></div>
+                            <div class="bar-legend"><i style="background:var(--seq-3)"></i>연간 공급량 (진한 막대 = 기준 연도)<i class="legend-dot" style="background:var(--yellow-600)"></i>평균기온</div>
+                        </div>
+                        <div class="stack-sm" id="trendNotes"></div>
+                    </div>
+                </section>
+
                 <!-- 기온 민감도 가로막대(#sensChart) + 예측 정확도(MAPE) 가로막대(#accChart) -->
                 <div class="grid-2">
                     <section class="card">

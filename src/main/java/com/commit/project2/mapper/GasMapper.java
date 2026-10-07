@@ -17,6 +17,9 @@ public interface GasMapper {
   // 전국(18) 전체 월별 데이터
   List<GasDTO> getNationalMonthly();
 
+  // 전국(18) 연도별 공급량 합계, 평균기온 (12개월이 모두 있는 연도만, ym 에 연도가 담김)
+  List<GasDTO> getNationalAnnual();
+
   // 12개월이 모두 있는 가장 최근 연도 (없으면 null)
   String getLatestFullYear();
 

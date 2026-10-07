@@ -3,6 +3,7 @@ package com.commit.project2.service;
 import com.commit.project2.dto.GasDTO;
 import com.commit.project2.dto.NationalDTO;
 import com.commit.project2.dto.NationalRegionDTO;
+import com.commit.project2.dto.NationalYearDTO;
 import com.commit.project2.mapper.GasMapper;
 import com.commit.project2.util.StatUtils;
 import lombok.RequiredArgsConstructor;
@@ -61,11 +62,28 @@ public class NationalService {
     return NationalDTO.builder()
         .year(year)
         .supplyYoy(getSupplyYoy(year))
+        .annual(getAnnualTrend())
         .mapeDelta(-0.8)  // TODO 예측 모델 연동 전까지 임시값
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
         .corr(getCorrMatrix(monthly))
         .corrPeriod(getPeriod(monthly))
         .build();
+  }
+
+  // 연도별 추이: 12개월이 모두 있는 연도만, 전년 대비 증감률 포함 (첫 연도는 null)
+  private List<NationalYearDTO> getAnnualTrend() {
+    List<NationalYearDTO> result = new ArrayList<>();
+    Double prev = null;
+    for (GasDTO row : gasMapper.getNationalAnnual()) {
+      result.add(NationalYearDTO.builder()
+          .year(row.getYm())
+          .supply(StatUtils.round(row.getSupply() / 1000.0, 1))   // 천㎥ -> 백만㎥
+          .avgTemp(row.getAvgTemp())
+          .supplyYoy(prev == null ? null : calcYoy(row.getSupply(), prev))
+          .build());
+      prev = row.getSupply();
+    }
+    return result;
   }
 
   // 첫 달 ~ 마지막 달 (월별 데이터가 YM 오름차순이라는 전제)
