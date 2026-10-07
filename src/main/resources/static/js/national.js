@@ -52,6 +52,7 @@
   //   national : { supplyYoy, mapeDelta, corrLabels, corr }
   function draw(regions, national) {
     const year = national.year;   // 기준 연도 (서버가 DB 에서 정함: 12개월이 모두 있는 가장 최근 연도)
+    const prevYear = String(Number(year) - 1);
     // 공급량 큰 순 정렬 ([...배열] 로 복사 후 정렬 → 원본 순서는 그대로)
     const R = [...regions].sort((a, b) => b.supply - a.supply);
     const total = R.reduce((s, r) => s + r.supply, 0);
@@ -67,10 +68,11 @@
     // KPI
     // 전년 대비(supplyYoy), 전분기 대비(mapeDelta) 는 서버가 계산해서 보내줌 (예전에는 1.9, -0.8 고정)
     $('kpis').innerHTML = [
-      D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: '전년 대비' }),
-      D.kpi({ label: '전국 가중 기온 민감도', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
-      D.kpi({ label: `전국 가중 MAPE ${TEMP_BADGE}`, value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: `정확도 경고 지역 ${TEMP_BADGE}`, value: bad.length, unit: '곳', caption: 'MAPE 8% 초과', accent: 'var(--red-500)' })
+      D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
+      D.kpi({ label: '전국 기온 민감도 (공급량 가중)', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
+      // MAPE 는 비율이라 전분기와의 차이는 %p 로 표시
+      D.kpi({ label: `예측 오차율 (MAPE) ${TEMP_BADGE}`, value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
+      D.kpi({ label: `오차 경고 지역 ${TEMP_BADGE}`, value: bad.length, unit: '곳', caption: 'MAPE 8% 초과 (임시 기준)', accent: 'var(--red-500)' })
     ].join('');
 
     // 지역별 공급 현황 (트리맵)
@@ -115,7 +117,7 @@
 
     const lastPaint = {};   // 지난번에 칠한 칸 색 (탭을 바꿀 때 이전 색에서 새 색으로 이어지게)
     function renderTree(animate) {
-      $('treemapSub').textContent = `크기 = ${year} 공급량(백만㎥) · 클릭하면 상세 이동`;   // 색 기준은 오른쪽 토글과 아래 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
+      $('treemapSub').textContent = `면적 = ${year} 공급량(백만㎥) · 클릭하면 상세 보기`;   // 색 기준은 오른쪽 토글과 아래 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
 
       const data = regions.map(r => {
         const pc = percapOf(r);
@@ -149,7 +151,7 @@
       // 색 범례 (어떤 색이 큰 값인지 알려줌)
       $('treemapLegend').innerHTML = metric === 'yoy'
         ? `<span>${signed(yoyMin)}%</span>${swatches(YOY_COLORS)}<span>${signed(yoyMax)}%</span><span class="tm-legend-note">전국 평균 ${signed(national.supplyYoy)}% · 진할수록 많이 증가 · 기온 영향 포함</span>`
-        : `<span>${fmt(pcMin)}㎥</span>${swatches(SEQ_VARS.map(v => `var(${v})`))}<span>${fmt(pcMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역 수 기준 4단계</span>`;
+        : `<span>${fmt(pcMin)}㎥</span>${swatches(SEQ_VARS.map(v => `var(${v})`))}<span>${fmt(pcMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역을 4등분해 색칠, 진할수록 많음</span>`;
     }
     renderTree();
     // 창 크기가 바뀌면 트리맵 칸 크기를 다시 계산 (크기 조절이 0.15초 멈췄을 때 한 번만)
@@ -229,7 +231,7 @@
     // 기온 민감도
     // 평균보다 높으면 겨울색(파랑)으로 강조, 막대 클릭 시 지역 상세로 이동
     D.hbar($('sensChart'), sens.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? C('--season-winter') : C('--seq-2') })),
-      { ref: avgSens, refLabel: `가중 평균 ${fmt(avgSens, 1)}%`, onClick: d => go(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)' });
+      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => go(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)' });
 
     // 정확도 낮은 지역
     // 기준선 8%: 넘으면 빨강
@@ -242,8 +244,6 @@
       ? D.callout('red', '경고 지역', `${bad.map(r => r.name).join('·')} — 임시 MAPE 기준입니다. 실제 예측 오차를 연동하면 달라질 수 있습니다.`)
       : D.callout('green', '경고 지역 없음', '모든 지역의 MAPE 가 8% 이하입니다.');
 
-    // 상관계수 (서버가 보내준 변수 이름 + 2차원 배열)
-    // lower: 대각선(자기 자신)과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
     // 연도별 추이: 막대 = 연간 공급량, 선 = 평균기온 (서버가 12개월이 모두 있는 연도만 보내줌)
     const annual = national.annual || [];
     if (!annual.length) {
@@ -312,31 +312,38 @@
       $('trendNotes').innerHTML = trendNotes.join('');
     }
 
+    // 상관계수 (서버가 보내준 변수 이름 + 2차원 배열)
+    // lower: 대각선(자기 자신)과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
     D.renderHeatmap($('heatmap'), national.corrLabels, national.corr, { lower: true });
-    $('corrSub').textContent = `전국 월별 데이터${national.corrPeriod ? ', ' + national.corrPeriod : ''} · 계절 변동 포함 · 피어슨 r`;
+    // '2021-01 ~ 2026-06' → '2021년 1월 ~ 2026년 6월'
+    const periodKo = (national.corrPeriod || '').split(' ~ ').map(ym => ym.replace(/^(\d{4})-(\d{2})$/, (_, y, m) => `${y}년 ${+m}월`)).join(' ~ ');
+    $('corrSub').textContent = `전국 월별 데이터${periodKo ? '(' + periodKo + ')' : ''} · 계절 변동 포함`;
+    // 페이지 맨 아래 데이터 안내 (기간, 기준 연도, 임시값)
+    $('dataNote').textContent = `데이터 기간 ${periodKo || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준, 연도별 추이는 12개월이 모두 있는 연도만 표시 · 예측 오차(MAPE)는 임시값입니다.`;
 
     // 히트맵 옆 설명 박스: r 값과 문장을 서버가 보낸 상관계수에서 만듦
     const idx = name => national.corrLabels.indexOf(name);
     const r = (a, b) => (idx(a) < 0 || idx(b) < 0) ? null : national.corr[idx(a)][idx(b)];
     const notes = [];
+    const rText = v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2);   // 범례와 같은 마이너스 기호
     const rHdd = r('공급량', '난방도일'), rTemp = r('공급량', '평균기온');
     if (rHdd !== null) {
-      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${rHdd.toFixed(2)}`,
+      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${rText(rHdd)}`,
         rTemp !== null && Math.abs(rHdd) > Math.abs(rTemp)
-          ? `기온(r = ${rTemp.toFixed(2)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.`
+          ? `기온(r = ${rText(rTemp)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.`
           : '난방도일(18°C 기준)과 기온 모두 공급량과 비슷한 수준으로 연동됩니다.'));
     }
     const rPop = r('인구', '세대수');
     if (rPop !== null) {
-      notes.push(D.callout('purple', `인구 ↔ 세대수 r = ${rPop.toFixed(2)}`,
+      notes.push(D.callout('purple', `인구 ↔ 세대수 r = ${rText(rPop)}`,
         Math.abs(rPop) >= 0.9
-          ? `${rPop < 0 ? '방향은 반대지만 ' : ''}상관이 매우 강해 두 변수는 거의 같은 정보를 담습니다. 분석에 함께 쓰면 정보가 중복됩니다.`
+          ? `${rPop < 0 ? '서로 반대로 움직이지만 ' : ''}상관이 매우 강해 거의 같은 정보를 담고 있어, 함께 쓰면 정보가 중복됩니다.`
           : '두 변수의 상관이 강하지 않아 각각 별개의 정보로 볼 수 있습니다.'));
     }
     // 월별 공급량은 계절 변동이 커서, 상관이 낮다고 '영향 없음'으로 읽으면 오해이므로 안내
     const rSupPop = r('공급량', '인구');
     if (rSupPop !== null && Math.abs(rSupPop) < 0.3) {
-      notes.push(D.callout('blue', `공급량 ↔ 인구 r = ${rSupPop.toFixed(2)}`,
+      notes.push(D.callout('blue', `공급량 ↔ 인구 r = ${rText(rSupPop)}`,
         '월별 공급량은 계절 변동이 커서, 인구의 영향이 이 수치에는 잘 드러나지 않을 수 있습니다.'));
     }
     $('corrNotes').innerHTML = notes.join('');

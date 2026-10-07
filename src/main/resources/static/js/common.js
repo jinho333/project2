@@ -298,15 +298,15 @@
 
   /* ---------- KPI / 탭 / 콜아웃 ---------- */
   // KPI 카드 HTML 문자열을 만들어 반환
-  //   delta   : 증감률(%)  → 화살표와 함께 표시
+  //   delta   : 증감률(%)  → 화살표와 함께 표시, deltaUnit: 값 뒤 단위 (비율끼리의 차이는 '%p', 기본 '%')
   //   goodWhen: 'up'(오르면 좋음) / 'down'(내리면 좋음) / 'neutral'(색 없음)
   //   caption, deltaLabel: 아래 작은 설명,  accent: 라벨 앞 작은 색 네모
-  function kpi({ label, value, unit, delta, deltaLabel, goodWhen = 'neutral', caption, accent }) {
+  function kpi({ label, value, unit, delta, deltaUnit = '%', deltaLabel, goodWhen = 'neutral', caption, accent }) {
     let meta = '';
     if (typeof delta === 'number' && !isNaN(delta)) {
       const up = delta >= 0;
       const cls = goodWhen === 'neutral' ? 'neutral' : (up === (goodWhen === 'up') ? 'good' : 'bad');
-      meta += `<span class="delta ${cls}"><i data-lucide="${up ? 'arrow-up-right' : 'arrow-down-right'}"></i>${Math.abs(delta).toFixed(1)}%</span>`;
+      meta += `<span class="delta ${cls}"><i data-lucide="${up ? 'arrow-up-right' : 'arrow-down-right'}"></i>${Math.abs(delta).toFixed(1)}${deltaUnit}</span>`;
     }
     if (deltaLabel || caption) meta += `<span>${deltaLabel || caption}</span>`;
     return `<div class="kpi"><div class="kpi-label">${accent ? `<span class="kpi-accent" style="background:${accent}"></span>` : ''}${label}</div>
@@ -420,7 +420,7 @@
       });
     });
     h += '</div>';
-    h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 빨강 양 / 파랑 음</span></div>`;
+    h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 빨강 = 같이 증가, 파랑 = 반대로 움직임</span></div>`;
     h += `<div class="hm-readout">${HINT}</div>`;
     el.innerHTML = h;
 

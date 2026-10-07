@@ -41,13 +41,15 @@
 .scale i{display:inline-block;width:20px;height:8px;border-radius:2px}
 .scale .steps{display:flex;gap:2px}
 
+/* 페이지 맨 아래 데이터 안내 (기간, 기준 연도, 임시값 안내) */
+.data-note{margin:4px 0 0;font-size:12px;line-height:1.6;color:var(--mute)}
 /* 막대 차트 아래 색 설명 */
 .bar-legend{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--mute)}
 .bar-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
 .bar-legend i:not(:first-child){margin-left:10px}
+.bar-legend i.legend-dot{border-radius:50%}
 /* 임시 데이터 배지: 공용 badge--yellow 는 글자 대비가 3.3 이라 이 페이지에서만 더 진하게 */
 .badge--temp{background:var(--yellow-100);color:#7a5a00}
-.bar-legend i.legend-dot{border-radius:50%}
 /* 트리맵 색 기준 토글: 작은 안내 글자를 토글 위에 둠 (토글이 색만 바꾼다는 것을 알려줌) */
 .metric-switch{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .metric-switch-label{font-size:12px;font-weight:500;color:var(--mute)}
