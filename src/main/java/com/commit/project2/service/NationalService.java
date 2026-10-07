@@ -8,6 +8,7 @@ import com.commit.project2.util.StatUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Year;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,8 +25,6 @@ import java.util.stream.Collectors;
 public class NationalService {
   private final GasMapper gasMapper;
 
-  private static final String YEAR = "2025";       // 기준 연도 (가장 최근 1년치 자료)
-  private static final String PREV_YEAR = "2024";  // 전년 대비 비교 연도
   private static final double HDD_BASE_TEMP = 18.0;  // 난방도일 기준온도
   private static final Set<String> WINTER_MONTHS = Set.of("12", "01", "02");
 
@@ -44,12 +43,24 @@ public class NationalService {
 
   /* ---------- 전국 요약 ---------- */
 
+  // 기준 연도: 12개월이 모두 있는 가장 최근 연도 (진행 중인 연도는 제외, DB 에 없으면 작년)
+  private String getBaseYear() {
+    String year = gasMapper.getLatestFullYear();
+    return year != null ? year : String.valueOf(Year.now().getValue() - 1);
+  }
+
+  private String getPrevYear(String year) {
+    return String.valueOf(Integer.parseInt(year) - 1);
+  }
+
   // GET /api/national 응답 만들기
   public NationalDTO getNationalSummary() {
     List<GasDTO> monthly = gasMapper.getNationalMonthly();
+    String year = getBaseYear();
 
     return NationalDTO.builder()
-        .supplyYoy(getSupplyYoy())
+        .year(year)
+        .supplyYoy(getSupplyYoy(year))
         .mapeDelta(-0.8)  // TODO 예측 모델 연동 전까지 임시값
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
         .corr(getCorrMatrix(monthly))
@@ -64,8 +75,8 @@ public class NationalService {
   }
 
   // 전국 전년 대비 공급량 증감률(%)
-  private double getSupplyYoy() {
-    return calcYoy(gasMapper.getNationalAnnualSupply(YEAR), gasMapper.getNationalAnnualSupply(PREV_YEAR));
+  private double getSupplyYoy(String year) {
+    return calcYoy(gasMapper.getNationalAnnualSupply(year), gasMapper.getNationalAnnualSupply(getPrevYear(year)));
   }
 
   // 증감률(%), 소수점 첫째 자리 (전년 값이 없거나 0 이하면 0)
@@ -108,16 +119,19 @@ public class NationalService {
 
   /* ---------- 시·도별 지표 ---------- */
 
-  // GET /api/national/regions 응답: 17개 시도 목록 (공급량, 인구는 YEAR 기준 DB 집계)
+  // GET /api/national/regions 응답: 17개 시도 목록 (공급량, 인구는 기준 연도 DB 집계)
   public List<NationalRegionDTO> getRegions() {
+    String year = getBaseYear();
+    String prevYear = getPrevYear(year);
+
     Map<Long, List<GasDTO>> monthlyByRegion = gasMapper.getRegionMonthly().stream()
         .collect(Collectors.groupingBy(GasDTO::getRegionId));
 
-    Map<Long, Double> prevSupply = gasMapper.getRegionAnnualStats(PREV_YEAR).stream()
+    Map<Long, Double> prevSupply = gasMapper.getRegionAnnualStats(prevYear).stream()
         .collect(Collectors.toMap(GasDTO::getRegionId, GasDTO::getSupply));
 
     List<NationalRegionDTO> result = new ArrayList<>();
-    for (GasDTO row : gasMapper.getRegionAnnualStats(YEAR)) {
+    for (GasDTO row : gasMapper.getRegionAnnualStats(year)) {
       int regionId = row.getRegionId().intValue();
       if (regionId < 1 || regionId > 17) continue;
 
@@ -131,7 +145,7 @@ public class NationalService {
           .pop(StatUtils.round(row.getPopulation() / 10000.0, 1))    // 명 -> 만 명
           .sensitivity(getSensitivity(monthly))
           .mape(MOCK_MAPE[regionId])
-          .trend(getPopulationTrend(monthly))
+          .trend(getPopulationTrend(monthly, year, prevYear))
           .lo(getAvgTemp(monthly, "-01"))
           .hi(getAvgTemp(monthly, "-08"))
           .build());
@@ -151,10 +165,10 @@ public class NationalService {
     return StatUtils.round(-StatUtils.slope(temp, supply) / StatUtils.mean(supply) * 100, 1);
   }
 
-  // 인구 증감률(%/년): YEAR 월평균 인구 vs PREV_YEAR 월평균 인구
-  private double getPopulationTrend(List<GasDTO> monthly) {
-    double prev = getAvgPopulation(monthly, PREV_YEAR);
-    double curr = getAvgPopulation(monthly, YEAR);
+  // 인구 증감률(%/년): 기준 연도 월평균 인구 vs 전년 월평균 인구
+  private double getPopulationTrend(List<GasDTO> monthly, String year, String prevYear) {
+    double prev = getAvgPopulation(monthly, prevYear);
+    double curr = getAvgPopulation(monthly, year);
     if (prev == 0) return 0.0;
     return StatUtils.round((curr - prev) / prev * 100, 1);
   }

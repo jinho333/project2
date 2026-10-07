@@ -51,6 +51,7 @@
   //   regions  : [{ id, name, supply, pop, sensitivity, mape, ... }]
   //   national : { supplyYoy, mapeDelta, corrLabels, corr }
   function draw(regions, national) {
+    const year = national.year;   // 기준 연도 (서버가 DB 에서 정함: 12개월이 모두 있는 가장 최근 연도)
     // 공급량 큰 순 정렬 ([...배열] 로 복사 후 정렬 → 원본 순서는 그대로)
     const R = [...regions].sort((a, b) => b.supply - a.supply);
     const total = R.reduce((s, r) => s + r.supply, 0);
@@ -66,14 +67,14 @@
     // KPI
     // 전년 대비(supplyYoy), 전분기 대비(mapeDelta) 는 서버가 계산해서 보내줌 (예전에는 1.9, -0.8 고정)
     $('kpis').innerHTML = [
-      D.kpi({ label: '전국 연간 공급량 (2025)', value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: '전년 대비' }),
+      D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: '전년 대비' }),
       D.kpi({ label: '전국 가중 기온 민감도', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
       D.kpi({ label: `전국 가중 MAPE ${TEMP_BADGE}`, value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaLabel: '전분기 대비', goodWhen: 'down' }),
       D.kpi({ label: `정확도 경고 지역 ${TEMP_BADGE}`, value: bad.length, unit: '곳', caption: 'MAPE 8% 초과', accent: 'var(--red-500)' })
     ].join('');
 
     // 지역별 공급 현황 (트리맵)
-    // 칸 크기는 항상 2025 공급량, 색만 탭으로 바꿈
+    // 칸 크기는 항상 기준 연도 공급량, 색만 탭으로 바꿈
     //   metric: 'yoy'(전년 대비 증감률) / 'percap'(1인당 공급량)
     let metric = 'yoy';
     // 움직임 줄이기 설정을 켠 사용자는 탭 이동·색 변화·도넛 확대 애니메이션 없이 바로 바뀌게
@@ -114,7 +115,7 @@
 
     const lastPaint = {};   // 지난번에 칠한 칸 색 (탭을 바꿀 때 이전 색에서 새 색으로 이어지게)
     function renderTree(animate) {
-      $('treemapSub').textContent = '크기 = 2025 공급량(백만㎥) · 클릭하면 상세 이동';   // 색 기준은 오른쪽 토글과 아래 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
+      $('treemapSub').textContent = `크기 = ${year} 공급량(백만㎥) · 클릭하면 상세 이동`;   // 색 기준은 오른쪽 토글과 아래 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
 
       const data = regions.map(r => {
         const pc = percapOf(r);
@@ -186,6 +187,7 @@
     const rows = [...legend.querySelectorAll('.dl-row')];
 
     // 가운데 글자: 평소에는 전국 합계 (백만㎥ → 억㎥ 로 /100), 호버 중에는 해당 조각의 비중과 공급량
+    $('donutSub').textContent = `${year}년 · 17개 시·도를 5개 권역으로 합산`;
     const center = $('donutCenter');
     const centerDefault = `<span>전국</span><b>${fmt(total / 100, 1)}</b><span>억㎥</span>`;
     center.innerHTML = centerDefault;

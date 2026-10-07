@@ -36,6 +36,18 @@
     ORDER BY YM
   </select>
 
+  <!-- 12개월이 모두 있는 가장 최근 연도 (진행 중인 연도는 제외), 없으면 null -->
+  <select id="getLatestFullYear" resultType="java.lang.String">
+    SELECT MAX(y)
+    FROM (
+      SELECT LEFT(YM, 4) AS y
+      FROM gas_monthly
+      WHERE REGION_ID = 18
+      GROUP BY LEFT(YM, 4)
+      HAVING COUNT(*) = 12
+    ) t
+  </select>
+
   <!-- 시·도 지표 API(/api/national/regions): 전국 페이지의 트리맵·도넛·막대가 사용 (NationalService) -->
   <!-- 시도별(18 제외) 연간 공급량 합계(천㎥), 인구 평균(명) -->
   <select id="getRegionAnnualStats" resultMap="gas">
