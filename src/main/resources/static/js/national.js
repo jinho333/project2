@@ -16,8 +16,7 @@
 
   /* ---------- ① 상수 ---------- */
 
-  const MAPE_LIMIT = 8;   // MAPE 경고 기준(%), 근거 없는 임시 기준
-  const TEMP_BADGE = '<span class="badge badge--temp">임시</span>';   // MAPE 가 임시값이라 관련 표시에 붙임 (예측 모델 연동 후 제거)
+  const MAPE_LIMIT = 8;   // MAPE 경고 기준(%)
   const METRIC_TABS = [{ id: 'yoy', label: '전년 대비 증감률' }, { id: 'percap', label: '1인당 공급량' }];
 
   // 트리맵 색: 진할수록 큰 값, 흰 글씨는 가장 진한 단계에만 씀
@@ -78,6 +77,7 @@
     return {
       regions, national, year, total, bySensitivity, byMape,
       prevYear: String(Number(year) - 1),
+      hasMape: regions.some(r => r.mape !== null && r.mape !== undefined),   // 예측 서버(FastAPI)가 꺼져 있으면 MAPE 가 비어서(null) 옴
       overLimit: byMape.filter(r => r.mape > MAPE_LIMIT),   // 경고 지역
       avgSens: weightedAvg(bySensitivity, 'sensitivity', total),
       avgMape: weightedAvg(byMape, 'mape', total),
@@ -88,13 +88,13 @@
   /* ---------- ③ 섹션별 그리기 (화면 순서와 같음) ---------- */
 
   // KPI 4개: 전년 대비, 전분기 대비는 서버가 계산해서 보내줌
-  const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit }) => {
+  const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape }) => {
     $('kpis').innerHTML = [
       D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
       D.kpi({ label: '전국 기온 민감도 (공급량 가중)', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
       // MAPE 는 비율이라 전분기와의 차이는 %p
-      D.kpi({ label: `예측 오차율 (MAPE) ${TEMP_BADGE}`, value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: `오차 경고 지역 ${TEMP_BADGE}`, value: overLimit.length, unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과 (임시 기준)`, accent: 'var(--red-500)' })
+      D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
+      D.kpi({ label: '오차 경고 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
     ].join('');
   };
 
@@ -314,21 +314,27 @@
   };
 
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
-  const drawBars = ({ bySensitivity, byMape, overLimit, avgSens }) => {
+  const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape }) => {
     // 민감도: 전국 평균보다 높으면 겨울색(파랑)으로 강조
     D.hbar($('sensChart'),
       bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? C('--season-winter') : C('--seq-2') })),
       { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)' });
 
-    // 예측 오차: 기준선을 넘으면 빨강
+    // 예측 오차: 기준선을 넘으면 빨강. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
+    const mapeAxisMax = Math.max(14, Math.ceil(Math.max(...byMape.map(r => r.mape || 0)) / 10) * 10);
     D.hbar($('accChart'),
       byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: r.mape > MAPE_LIMIT ? C('--red-500') : C('--stone') })),
-      { max: 14, ref: MAPE_LIMIT, refLabel: `임시 기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: 'MAPE (%)' });
-    $('badBadge').innerHTML = `<i class="dot"></i>${overLimit.length}곳 경고`;
-    // MAPE 가 아직 임시값이라 원인을 단정하는 문구는 넣지 않음. 지역 이름은 데이터에서 뽑음
-    $('accCallout').innerHTML = overLimit.length
-      ? D.callout('red', '경고 지역', `${overLimit.map(r => r.name).join('·')} — 임시 MAPE 기준입니다. 실제 예측 오차를 연동하면 달라질 수 있습니다.`)
-      : D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
+      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: 'MAPE (%)' });
+    $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>${overLimit.length}곳 경고` : '';
+    $('badBadge').hidden = !hasMape;
+    // 원인은 지역마다 다를 수 있어서 단정하는 문구는 넣지 않고, 어떻게 구한 값인지만 설명. 지역 이름은 데이터에서 뽑음
+    if (!hasMape) {
+      $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
+    } else if (overLimit.length) {
+      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => r.name).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다.`);
+    } else {
+      $('accCallout').innerHTML = D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
+    }
   };
 
   // 히트맵 옆 설명 박스: r 값과 문장을 서버가 보낸 상관계수에서 만듦
@@ -368,9 +374,9 @@
     $('corrNotes').innerHTML = corrNotesOf(national);
   };
 
-  // 페이지 맨 아래 데이터 안내: 기간, 기준 연도, 임시값
+  // 페이지 맨 아래 데이터 안내: 기간, 기준 연도, 예측 오차 기준
   const drawDataNote = ({ year, period }) => {
-    $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준, 연도별 추이는 12개월이 모두 있는 연도만 표시 · 예측 오차(MAPE)는 임시값입니다.`;
+    $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준, 연도별 추이는 12개월이 모두 있는 연도만 표시 · 예측 오차(MAPE)는 최근 12개월을 예측 모델로 다시 예측해 구한 값입니다.`;
   };
 
   // 받아온 데이터로 화면 전체를 한 번 그림

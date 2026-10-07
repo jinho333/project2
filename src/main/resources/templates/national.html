@@ -97,10 +97,10 @@
                             <div>
                                 <div class="eyebrow">Accuracy</div>
                                 <h3 class="card-title">지역별 예측 오차</h3>
-                                <div class="card-sub">MAPE(평균 오차율) · 높을수록 오차 큼</div>
+                                <div class="card-sub">최근 12개월 MAPE(평균 오차율) · 높을수록 오차 큼</div>
                             </div>
-                            <!-- MAPE 가 아직 임시값이라 '임시 데이터' 표시, 경고 지역 수는 JS 가 채움 (#badBadge) -->
-                            <div class="head-badges"><span class="badge badge--temp">임시 데이터</span><span class="badge badge--red" id="badBadge"></span></div>
+                            <!-- 경고 지역 수는 JS 가 채움 (#badBadge), 예측 오차를 못 받아오면 숨김 -->
+                            <div class="head-badges"><span class="badge badge--red" id="badBadge"></span></div>
                         </div>
                         <div class="card-body">
                             <div class="chart" style="height:440px"><canvas id="accChart"></canvas></div>
@@ -124,7 +124,7 @@
                     </div>
                 </section>
 
-                <!-- ⑥ 데이터 안내: 기간·기준 연도·임시값 (JS 가 채움). TODO: 데이터 출처 기관명 확인 후 추가 -->
+                <!-- ⑥ 데이터 안내: 기간·기준 연도·예측 오차 기준 (JS 가 채움). TODO: 데이터 출처 기관명 확인 후 추가 -->
                 <p class="data-note" id="dataNote"></p>
             </div>
         </div>

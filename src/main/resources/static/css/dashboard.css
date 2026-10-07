@@ -48,8 +48,6 @@
 .bar-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
 .bar-legend i:not(:first-child){margin-left:10px}
 .bar-legend i.legend-dot{border-radius:50%}
-/* 임시 데이터 배지: 공용 badge--yellow 는 글자 대비가 3.3 이라 이 페이지에서만 더 진하게 */
-.badge--temp{background:var(--yellow-100);color:#7a5a00}
 /* 트리맵 색 기준 토글: 작은 안내 글자를 토글 위에 둠 (토글이 색만 바꾼다는 것을 알려줌) */
 .metric-switch{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .metric-switch-label{font-size:12px;font-weight:500;color:var(--mute)}
