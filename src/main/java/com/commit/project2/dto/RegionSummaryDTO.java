@@ -24,15 +24,14 @@ import lombok.Data;
  */
 @Data
 public class RegionSummaryDTO {
-  /** 지역 ID. common.js 가 r.id 로 읽고, API ② 경로(/api/regions/{id}/stats) 에도 들어감. */
-  private Long id;
-
-  /** 지역 이름(짧은 형태). 지도 타일에 표시되고, common.js TILE_POS 키와 일치해야 함. */
-  private String name;
-
-  /** 2025년 연간 공급량. 단위: 백만㎥. (지도 색칠 / 전국 비중 계산에 사용) */
-  private Double supply;
-
-  /** 2025년 평균 인구. 단위: 만 명. (region.js의 1인당 공급량 계산에 사용) */
-  private Double pop;
+  //Region 응답용 DTO 생성 -> common.js/forecast.js/national.js/region.js의 r.id, r.name, r.supply, r.pop의 형태를 유지하기 위해서
+  //Region DTO에 GasDTO 추가시 r.supply → r.gasDTO.supply 형식으로 JS를 수정해야 하고,
+  //id/name도 regionId/regionName으로 나가기 때문에 응답용 DTO 생성이 유리하다고 판단.
+  // api/regions에서 사용할 DTO
+  private Long id;  //r.id
+  private String name; //r.name
+  private Double supply; //r.supply (연간 공급량, 백만㎥)
+  private Double pop; //r.pop (인구, 만 명)
+  private Double lo;   //r.lo (1월 평균기온) → 시뮬레이션 슬라이더 처음 위치
+  private Double hi;   //r.hi (8월 평균기온)
 }
