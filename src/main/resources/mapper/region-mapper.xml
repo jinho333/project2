@@ -29,6 +29,18 @@
     SELECT REGION_NAME FROM REGION WHERE REGION_ID = #{regionId}
   </select>
 
+  <!-- 지역별 1월·8월 평균기온 (시뮬레이션 슬라이더 기본값) -->
+  <select id="getTempRanges" resultType="com.commit.project2.dto.TempRangeDTO">
+    SELECT
+    REGION_ID AS id,
+    AVG(CASE WHEN YM LIKE '%-01' THEN AVG_TEMP END) AS lo,
+    AVG(CASE WHEN YM LIKE '%-08' THEN AVG_TEMP END) AS hi,
+    ROUND((AVG(CASE WHEN YM LIKE '2025%' THEN POPULATION END)
+         / AVG(CASE WHEN YM LIKE '2024%' THEN POPULATION END) - 1) * 100, 1) AS trend
+    FROM gas_monthly
+    GROUP BY REGION_ID
+  </select>
+
 
   <!-- =======================================================
        [API ①] GET /api/regions

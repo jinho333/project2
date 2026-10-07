@@ -34,4 +34,6 @@ public class RegionSummaryDTO {
   private Double pop; //r.pop (인구, 만 명)
   private Double lo;   //r.lo (1월 평균기온) → 시뮬레이션 슬라이더 처음 위치
   private Double hi;   //r.hi (8월 평균기온)
+  private Double trend; //r.trend (인구 증감률, %/년) → 예측 페이지 '예측 입력' 카드
+  private Double mape;  //r.mape (예측 오차율, %) → 지역 이름 옆 MAPE 배지. FastAPI 모델이 계산한 값
 }
