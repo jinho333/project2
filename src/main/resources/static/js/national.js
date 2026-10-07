@@ -56,6 +56,8 @@
     const sens = [...regions].sort((a, b) => b.sensitivity - a.sensitivity);
     const avgSens = sens.reduce((s, r) => s + r.sensitivity * r.supply, 0) / total;
     // 예측 오차(MAPE) 큰 순 / MAPE 8% 넘는 '경고' 지역
+    // MAPE 는 FastAPI(파이썬 모델)의 실제 값. FastAPI 가 꺼져 있으면 값이 비어서(null) 옴 → hasMape = false
+    const hasMape = regions.some(r => r.mape !== null && r.mape !== undefined);
     const acc = [...regions].sort((a, b) => b.mape - a.mape);
     const bad = acc.filter(r => r.mape > 8);
     // 전국 MAPE: 공급량이 큰 지역에 더 큰 비중을 두는 가중 평균
@@ -66,8 +68,8 @@
     $('kpis').innerHTML = [
       D.kpi({ label: '전국 연간 공급량 (2025)', value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: '전년 대비' }),
       D.kpi({ label: '전국 가중 기온 민감도', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
-      D.kpi({ label: '전국 가중 MAPE', value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: '정확도 경고 지역', value: bad.length, unit: '곳', caption: 'MAPE 8% 초과', accent: 'var(--red-500)' })
+      D.kpi({ label: '전국 가중 MAPE', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaLabel: '전분기 대비', goodWhen: 'down' }),
+      D.kpi({ label: '정확도 경고 지역', value: hasMape ? bad.length : '–', unit: '곳', caption: 'MAPE 8% 초과', accent: 'var(--red-500)' })
     ].join('');
 
     // 지역별 공급 현황 (트리맵)
@@ -225,14 +227,23 @@
 
     // 정확도 낮은 지역
     // 기준선 8%: 넘으면 빨강
+    // 가로축 최대값: 가장 큰 MAPE 를 10 단위로 올림 (예: 64.6 → 70). 값이 작아도 최소 14 는 유지
+    //   (예전에는 14 로 고정이라, 실제 값이 14% 를 넘으면 막대가 잘렸음)
+    const maxMape = Math.max(...acc.map(r => r.mape || 0));
+    const accMax = Math.max(14, Math.ceil(maxMape / 10) * 10);
     D.hbar($('accChart'), acc.map(r => ({ id: r.id, label: r.name, value: r.mape, color: r.mape > 8 ? C('--red-500') : C('--stone') })),
-      { max: 14, ref: 8, refLabel: '기준 8%', onClick: d => go(d.id), showValue: true, axisTitle: 'MAPE (%)' });
-    $('badBadge').innerHTML = `<i class="dot"></i>${bad.length}곳 경고`;
+      { max: accMax, ref: 8, refLabel: '기준 8%', onClick: d => go(d.id), showValue: true, axisTitle: 'MAPE (%)' });
+    $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>${bad.length}곳 경고` : '';
+    $('badBadge').hidden = !hasMape;
     // 경고 지역 이름은 데이터에서 뽑음 (예전에는 '세종·제주·울산' 이 문장에 고정으로 적혀 있었음)
-    // MAPE 는 아직 서버의 임시값이라 원인을 단정하는 문구는 넣지 않음
-    $('accCallout').innerHTML = bad.length
-      ? D.callout('red', '경고 지역', `${bad.map(r => r.name).join('·')} — 임시 MAPE 기준입니다. 실제 예측 오차를 연동하면 달라질 수 있습니다.`)
-      : D.callout('green', '경고 지역 없음', '모든 지역의 MAPE 가 8% 이하입니다.');
+    // 원인은 지역마다 다를 수 있어서 단정하는 문구는 넣지 않고, 어떻게 구한 값인지만 설명
+    if (!hasMape) {
+      $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
+    } else if (bad.length) {
+      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${bad.map(r => r.name).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 8%를 넘는 지역입니다.`);
+    } else {
+      $('accCallout').innerHTML = D.callout('green', '경고 지역 없음', '모든 지역의 MAPE 가 8% 이하입니다.');
+    }
 
     // 상관계수 (서버가 보내준 변수 이름 + 2차원 배열)
     // lower: 대각선(자기 자신)과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
