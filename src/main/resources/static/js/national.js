@@ -78,15 +78,17 @@
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v), 1);   // +6.3 / −2.1
     const percapOf = r => (r.supply * 1e6) / (r.pop * 1e4);                        // 백만㎥ / 만 명 → ㎥/인
-    const maxAbsYoy = Math.max(...regions.map(r => Math.abs(r.supplyYoy)), 0.1);
+    const yoyAll = regions.map(r => r.supplyYoy);
+    const yoyMin = Math.min(...yoyAll), yoyMax = Math.max(...yoyAll);
     const pcAll = regions.map(percapOf).sort((a, b) => a - b);
     const pcMin = pcAll[0], pcMax = pcAll[pcAll.length - 1];
-    const DIV_VARS = ['--div-neg-3', '--div-neg-2', '--div-neg-1', '--div-0', '--div-pos-1', '--div-pos-2', '--div-pos-3'];
+    // 전년 대비 색: 모든 지역이 늘어서 0 기준 빨강-파랑으로 하면 거의 한 색이 됨 → 빨강 한 계열을 실제 범위(최소~최대)에 맞춰 4단계로 씀
+    const YOY_COLORS = ['var(--div-pos-1)', 'color-mix(in srgb, var(--div-pos-1), var(--div-pos-2))', 'var(--div-pos-2)', 'var(--div-pos-3)'];
     // 1인당 색: 중간 파랑(--seq-4)은 검정·흰 글씨 모두 대비가 모자라서 뺀 4단계
     const SEQ_VARS = ['--seq-1', '--seq-2', '--seq-3', '--seq-5'];
     // 제주·세종이 유난히 낮아서 최소~최대를 균등 분할하면 나머지가 두 색으로만 갈림 → 지역 수 기준 4분위로 나눔
     const pcCuts = [1, 2, 3].map(k => pcAll[Math.floor((pcAll.length * k) / SEQ_VARS.length)]);
-    const swatches = vars => vars.map(v => `<i style="background:var(${v})"></i>`).join('');
+    const swatches = colors => colors.map(c => `<i style="background:${c}"></i>`).join('');
 
     // 탭 버튼은 한 번만 만들고 클릭하면 선택 표시만 바꿈 → 흰 배경(슬라이더)이 버튼 사이를 미끄러지듯 이동
     const tabsEl = $('metricTabs');
@@ -115,8 +117,9 @@
         const pc = percapOf(r);
         const head = `<b>${r.name}</b>공급량 ${fmt(r.supply, 1)} 백만㎥ (${fmt((r.supply / total) * 100, 1)}%)<br>`;
         if (metric === 'yoy') {
-          const t = r.supplyYoy / maxAbsYoy;   // -1 ~ 1 (0 = 변화 없음)
-          return { id: r.id, label: r.name, value: r.supply, color: D.divColor(t), ink: Math.abs(t) >= 0.83 ? '#fff' : 'var(--ink)',
+          const step = Math.min(YOY_COLORS.length - 1, Math.floor(((r.supplyYoy - yoyMin) / (yoyMax - yoyMin || 1)) * YOY_COLORS.length));
+          // 흰 글씨는 가장 진한 단계에서만
+          return { id: r.id, label: r.name, value: r.supply, color: YOY_COLORS[step], ink: step === YOY_COLORS.length - 1 ? '#fff' : 'var(--ink)',
             note: `${signed(r.supplyYoy)}%`, tip: `${head}전년 대비 ${signed(r.supplyYoy)}%<br>1인당 ${fmt(pc)}㎥/인·년` };
         }
         const step = pcCuts.filter(c => pc >= c).length;
@@ -141,8 +144,8 @@
 
       // 색 범례 (어떤 색이 큰 값인지 알려줌)
       $('treemapLegend').innerHTML = metric === 'yoy'
-        ? `<span>−${fmt(maxAbsYoy, 1)}%</span>${swatches(DIV_VARS)}<span>+${fmt(maxAbsYoy, 1)}%</span><span class="tm-legend-note">기온 영향 포함 · 빨강 증가 / 파랑 감소</span>`
-        : `<span>${fmt(pcMin)}㎥</span>${swatches(SEQ_VARS)}<span>${fmt(pcMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역 수 기준 4단계</span>`;
+        ? `<span>${signed(yoyMin)}%</span>${swatches(YOY_COLORS)}<span>${signed(yoyMax)}%</span><span class="tm-legend-note">전국 평균 ${signed(national.supplyYoy)}% · 진할수록 많이 증가 · 기온 영향 포함</span>`
+        : `<span>${fmt(pcMin)}㎥</span>${swatches(SEQ_VARS.map(v => `var(${v})`))}<span>${fmt(pcMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역 수 기준 4단계</span>`;
     }
     renderTree();
     // 창 크기가 바뀌면 트리맵 칸 크기를 다시 계산 (크기 조절이 0.15초 멈췄을 때 한 번만)
