@@ -12,6 +12,8 @@
   // D = 공통 함수(common.js)
   const D = window.Dash, { C, fmt } = D;
   const $ = id => document.getElementById(id);
+  // MAPE 가 아직 서버의 임시값이라 관련 KPI 라벨에 붙이는 표시 (예측 모델 연동 후 제거)
+  const TEMP_BADGE = '<span class="badge badge--temp">임시</span>';
   // 지역 클릭 시 해당 지역 상세 페이지로 이동
   // ★ 클릭한 지역의 id 를 페이지 주소의 ?region= 에 넣음 → /region?region=se
   //   지역 상세 페이지는 공용 지역 목록(D.getRegions)의 id 로 지역을 찾으므로,
@@ -66,8 +68,8 @@
     $('kpis').innerHTML = [
       D.kpi({ label: '전국 연간 공급량 (2025)', value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: '전년 대비' }),
       D.kpi({ label: '전국 가중 기온 민감도', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
-      D.kpi({ label: '전국 가중 MAPE', value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: '정확도 경고 지역', value: bad.length, unit: '곳', caption: 'MAPE 8% 초과', accent: 'var(--red-500)' })
+      D.kpi({ label: `전국 가중 MAPE ${TEMP_BADGE}`, value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaLabel: '전분기 대비', goodWhen: 'down' }),
+      D.kpi({ label: `정확도 경고 지역 ${TEMP_BADGE}`, value: bad.length, unit: '곳', caption: 'MAPE 8% 초과', accent: 'var(--red-500)' })
     ].join('');
 
     // 지역별 공급 현황 (트리맵)
