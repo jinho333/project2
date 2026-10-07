@@ -1,7 +1,7 @@
 package com.commit.project2.controller;
 
 import com.commit.project2.service.ForecastService;
-import com.commit.project2.service.NationService;
+import com.commit.project2.service.NationalService;
 import com.commit.project2.service.RegionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequiredArgsConstructor
 public class DashboardController {
     private final RegionService regionService;
-    private final NationService nationService;
+    private final NationalService nationalService;
     private final ForecastService forecastService;
 
     @GetMapping("/")
