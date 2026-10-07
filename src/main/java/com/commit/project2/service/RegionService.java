@@ -4,8 +4,10 @@ import com.commit.project2.dto.*;
 import com.commit.project2.mapper.GasMapper;
 import com.commit.project2.mapper.RegionMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -17,7 +19,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RegionService {
 
-  private final GasMapper gasMapper;        // 현재는 미사용 (다른 파트가 공용 쿼리를 추가하면 쓰게 됨)
+  private final GasMapper gasMapper;        // 기준 연도(12개월이 모두 있는 가장 최근 연도)를 구할 때 사용
   private final RegionMapper regionMapper;  // region 파트 전용 쿼리
   private final RestClient restClient;      // FastAPI 호출용 (지역 목록의 MAPE 를 받아올 때만 사용)
 
@@ -29,13 +31,21 @@ public class RegionService {
   };
 
 
-  /*  API ① 지역 목록 + 2025년 연간 공급량, 인구
+  /*  API ① 지역 목록 + 기준 연도의 연간 공급량, 인구
    *    - 쿼리에서 단위 환산까지 다 하므로 Service 는 그대로 전달*/
   public List<RegionSummaryDTO> getRegionSummaries() {
-    List<RegionSummaryDTO> list = regionMapper.getRegionSummaries();   // 기존 쿼리 그대로
+    // 기준 연도 = 12개월이 모두 있는 가장 최근 연도 (지금 데이터로는 "2025")
+    //   예전에는 쿼리에 '2025%' 로 고정돼 있었음 → DB 에서 구해 쿼리에 넘기도록 바꿈 (전국 페이지와 같은 방식)
+    String year = gasMapper.getLatestFullYear();
+    if (year == null) {
+      return new ArrayList<>();   // 12개월이 다 있는 연도가 하나도 없으면 빈 목록
+    }
+    String prevYear = String.valueOf(Integer.parseInt(year) - 1);   // 전년도 ("2025" → "2024")
+
+    List<RegionSummaryDTO> list = regionMapper.getRegionSummaries(year);
 
     // 번호가 같은 지역에 1월·8월 평균기온, 인구 증감률을 넣어줌
-    List<TempRangeDTO> temps = regionMapper.getTempRanges();
+    List<TempRangeDTO> temps = regionMapper.getTempRanges(year, prevYear);
     for (RegionSummaryDTO region : list) {
       for (TempRangeDTO temp : temps) {
         if (temp.getId().equals(region.getId())) {
@@ -65,6 +75,38 @@ public class RegionService {
       // FastAPI 가 꺼져 있거나 /mape 주소가 없는 경우 → MAPE 없이 진행
     }
     return list;
+  }
+
+  /*  지역 번호가 DB 에 있는지 확인. 없으면 404(Not Found) 응답을 보냄
+   *    - 지역 번호를 받는 API(통계, 예측, 시뮬레이션)가 맨 처음에 호출
+   *    - throw : 여기서 멈추고 "문제가 생겼다"고 알림 (아래 코드는 실행되지 않음)
+   *    - ResponseStatusException : Spring 이 이걸 받아서 지정한 응답 코드(404)로 자동 응답
+   *
+   *  [기록] 2026-10-07 추가한 이유
+   *    없는 번호(예: 999)로 API 를 직접 부르면
+   *      통계           → 200 + 빈 결과   (없는 지역인데 정상인 것처럼 응답)
+   *      예측·시뮬레이션 → 500             (이름이 null 인 채로 FastAPI 를 호출 → FastAPI 의 404 를 처리 못 함)
+   *    → 두 경우 모두 "그런 지역 없음(404)" 이 맞는 응답이라, FastAPI 를 부르기 전에 여기서 먼저 확인 */
+  public void checkRegion(Long regionId) {
+    String name = regionMapper.getRegionName(regionId);   // 없는 번호면 null
+    if (name == null) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "없는 지역 번호입니다: " + regionId);
+    }
+  }
+
+  /*  GET /api/regions/years — 연도 버튼에 쓸 연도 목록 + 기준 연도
+   *    years    : 데이터가 있는 연도 전체        예) [2021, 2022, 2023, 2024, 2025, 2026]
+   *    baseYear : 12개월이 모두 있는 가장 최근 연도 예) 2025  (화면에서 처음 선택되는 연도)
+   *    → baseYear 보다 큰 연도(2026)는 아직 진행 중인 해 */
+  public YearInfoDTO getYearInfo() {
+    YearInfoDTO info = new YearInfoDTO();
+    info.setYears(regionMapper.getYears());
+
+    String year = gasMapper.getLatestFullYear();   // "2025" (없으면 null)
+    if (year != null) {
+      info.setBaseYear(Integer.parseInt(year));    // 글자 "2025" → 숫자 2025
+    }
+    return info;
   }
 
   /* ============================================================

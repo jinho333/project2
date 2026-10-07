@@ -10,6 +10,7 @@
  *   MONTHS / season()    월 이름, 계절 판별
  *   url(path)            서버 주소 만들기                 예) url('api/regions') → '/api/regions'
  *   loadRegions()        ★ 지역 목록을 서버에서 받아옴 (모든 페이지가 맨 처음 호출)
+ *   loadYears()          연도 목록 + 기준 연도를 서버에서 받아옴 (지역 상세 페이지의 연도 버튼)
  *   getRegion/setRegion  선택한 지역 번호 읽기 / 저장
  *   showError()          서버 요청 실패 시 빨간 안내 박스
  *   renderTileMap        지역 타일 지도 그리기
@@ -46,9 +47,15 @@
  *          [ { id: 1, name: '서울', supply: 2399.5, pop: 932.2,
  *              lo: -1.8, hi: 27.3, trend: -0.4, mape: 8.5 }, ... ]
  *          id     = DB 의 REGION_ID (숫자)
- *          supply = 2025 연간 공급량,  pop = 2025 평균 인구
+ *          supply = 기준 연도의 연간 공급량,  pop = 기준 연도의 평균 인구
+ *                   (기준 연도 = 12개월이 모두 있는 가장 최근 연도. 지금은 2025)
  *          lo/hi  = 1월/8월 평균기온 (시뮬레이션 슬라이더의 처음 위치)
  *          trend  = 인구 증감률(%/년),  mape = 예측 오차율(%, FastAPI 가 꺼져 있으면 null)
+ *
+ *      GET  /api/regions/years                         사용: region.js (연도 버튼)
+ *        → { years: [2021, 2022, 2023, 2024, 2025, 2026], baseYear: 2025 }
+ *          years    = 데이터가 있는 연도 전체
+ *          baseYear = 기준 연도 (처음 선택되는 연도. 이보다 큰 연도는 아직 진행 중인 해)
  *
  *   ② GET  /api/regions/{regionId}/stats?year=2025    사용: region.js
  *        → { months:     [ { m: 0, temp: -0.4, value: 468.7, forecast: false }, ... 12개 ],
@@ -166,8 +173,8 @@
   //   ※ 파이썬 main.py 의 month_temp 와 똑같은 식. 한쪽만 바꾸면 화면과 계산 결과가 달라지니 같이 바꿀 것
   const monthTemp = (lo, hi, m) => (lo + hi) / 2 - ((hi - lo) / 2) * Math.cos((2 * Math.PI * (m - 0.35)) / 12);
 
-  // 지역 상세 페이지의 연도 선택 버튼에 보여줄 연도 (데이터가 추가되면 여기에 연도를 더할 것)
-  const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+  // ※ 연도 목록은 예전에 여기에 YEARS = [2021, ..., 2026] 으로 적혀 있었음
+  //   지금은 서버에서 받아옴 → 아래 5번의 loadYears() 참고
 
 
   /* =====================================================================
@@ -372,6 +379,17 @@
       return { ...r, col: pos[0], row: pos[1] };
     });
     return regions;
+  }
+
+  // loadYears() : 서버에서 연도 목록과 기준 연도를 받아옴 (지역 상세 페이지의 연도 버튼용)
+  //   돌려주는 값: { years: [2021, 2022, ..., 2026], baseYear: 2025 }
+  //     years    = 데이터가 있는 연도 전체
+  //     baseYear = 12개월이 모두 있는 가장 최근 연도 (처음 선택할 연도)
+  //   쓰는 법: const info = await D.loadYears();   →  info.years, info.baseYear
+  //   연도를 JS 에 직접 적지 않으므로, DB 에 새 연도 데이터가 들어오면 버튼이 자동으로 늘어남
+  async function loadYears() {
+    const res = await axios.get(url('api/regions/years'));
+    return res.data;
   }
 
   // getRegions() : 저장해 둔 지역 목록 전체를 돌려줌  예) 예측 페이지의 지역 드롭다운 만들 때
@@ -804,8 +822,8 @@
   //   { C, fmt } 는 { C: C, fmt: fmt } 를 줄여 쓴 것
   window.Dash = {
     C, fmt, seq, seqInk, divColor, debounce, icons, hbar,
-    MONTHS, season, SEASON_KO, monthTemp, YEARS,
-    url, loadRegions, getRegions, findRegion, getRegion, setRegion, showError, clearError,
+    MONTHS, season, SEASON_KO, monthTemp,
+    url, loadRegions, loadYears, getRegions, findRegion, getRegion, setRegion, showError, clearError,
     renderTileMap, renderRegionInfo, kpi, renderTabs, renderPills, callout, renderTreemap, renderHeatmap
   };
 })();

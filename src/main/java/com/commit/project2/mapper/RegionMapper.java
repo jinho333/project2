@@ -22,7 +22,11 @@ import java.util.List;
 @Mapper
 public interface RegionMapper {
 
-  List<TempRangeDTO> getTempRanges();
+  /** 지역별 1월·8월 평균기온 + 인구 증감률(year 평균 인구 ÷ prevYear 평균 인구 - 1).
+   *  @param year     기준 연도 (예: "2025")
+   *  @param prevYear 그 전년도 (예: "2024") */
+  List<TempRangeDTO> getTempRanges(@Param("year") String year,
+                                   @Param("prevYear") String prevYear);
   /* ============================================================
    * [공용] 지역 테이블 조회
    * ============================================================ */
@@ -40,10 +44,19 @@ public interface RegionMapper {
    * [API ①] GET /api/regions
    * ============================================================ */
 
-  /** 2025년 기준 "지역 목록 + 연간 공급량 + 평균 인구".
+  /** 기준 연도(year)의 "지역 목록 + 연간 공급량 + 평균 인구".
+   *  @param year 기준 연도 (예: "2025"). RegionService 가 getLatestFullYear() 로 구해서 넘김
    *  응답은 List<RegionSummaryDTO> 로 바로 매핑됨.
    *  SQL 쪽에서 단위 환산을 끝내므로 Service 는 그대로 전달만 함. */
-  List<RegionSummaryDTO> getRegionSummaries();
+  List<RegionSummaryDTO> getRegionSummaries(@Param("year") String year);
+
+
+  /* ============================================================
+   * GET /api/regions/years
+   * ============================================================ */
+
+  /** 데이터가 있는 연도 목록 (오름차순). 예) [2021, 2022, ..., 2026] */
+  List<Integer> getYears();
 
 
   /* ============================================================

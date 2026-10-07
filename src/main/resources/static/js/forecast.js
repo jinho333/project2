@@ -82,7 +82,7 @@
       // API ⑤ 선택 지역의 예측
       // ★ regionId 를 URL 에 넣는 곳
       //   `...${regionId}...` : 백틱(`) 문자열 안에 변수 값을 끼워 넣는 문법
-      //   regionId 가 'se' 이면 → '/api/regions/se/forecast?horizon=6'
+      //   regionId 가 3 이면 → '/api/regions/3/forecast?horizon=6'
       //   Spring: @GetMapping("/api/regions/{regionId}/forecast") + @PathVariable, @RequestParam
       const res2 = await axios.get(D.url(`api/regions/${regionId}/forecast`), { params: { horizon } });
       fc = res2.data;
@@ -94,7 +94,7 @@
     D.clearError();
 
     // 지도 색 = 각 지역의 향후 horizon개월 예측 합계
-    // summary 배열을 { 'se': 2310.5, 'gg': ... } 모양으로 바꿔서 id 로 바로 찾을 수 있게 함
+    // summary 배열을 { 1: 478.2, 2: 150.3, ... } 모양으로 바꿔서 id 로 바로 찾을 수 있게 함
     const totals = {};
     summary.forEach(t => { totals[t.id] = t.total; });
     D.renderTileMap($('map'), { valueOf: x => totals[x.id] || 0, selected: r.id, legendLabel: `${horizon}개월 예측`, onSelect: changeRegion });
@@ -197,7 +197,7 @@
     let base, sim;
     try {
       // API ⑥ 시뮬레이션 (POST: 입력값을 body 에 JSON 으로 담아서 보냄)
-      // ★ regionId 를 URL 에 넣는 곳 → '/api/regions/se/simulation'
+      // ★ regionId 를 URL 에 넣는 곳 → '/api/regions/3/simulation'
       //   두 번째 값 { tempLo, tempHi, popPct } 가 요청 body
       //   Spring: @PostMapping("/api/regions/{regionId}/simulation") + @PathVariable + @RequestBody(DTO)
       const res = await axios.post(D.url(`api/regions/${regionId}/simulation`), {
@@ -283,7 +283,7 @@
       D.showError(err, '지역 목록');
       return;
     }
-    // ★ 첫 화면의 regionId 정하기: 주소의 ?region=se → 서버가 넘긴 값 → 저장값 → 첫 번째 지역
+    // ★ 첫 화면의 regionId 정하기: 주소의 ?region=3 → 서버가 넘긴 값 → 저장값 → 첫 번째 지역
     regionId = D.getRegion();
     D.setRegion(regionId);
     resetSim();
