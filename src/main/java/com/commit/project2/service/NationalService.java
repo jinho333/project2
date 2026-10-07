@@ -3,6 +3,7 @@ package com.commit.project2.service;
 import com.commit.project2.dto.GasDTO;
 import com.commit.project2.dto.NationalDTO;
 import com.commit.project2.dto.NationalRegionDTO;
+import com.commit.project2.dto.NationalYearDTO;
 import com.commit.project2.dto.PyMapeDTO;
 import com.commit.project2.dto.PyMapeItemDTO;
 import com.commit.project2.mapper.GasMapper;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.Year;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,8 +30,6 @@ public class NationalService {
   private final GasMapper gasMapper;
   private final RestClient restClient;   // FastAPI 호출용 (예측 오차 MAPE 를 받아올 때 사용)
 
-  private static final String YEAR = "2025";       // 기준 연도 (가장 최근 1년치 자료)
-  private static final String PREV_YEAR = "2024";  // 전년 대비 비교 연도
   private static final double HDD_BASE_TEMP = 18.0;  // 난방도일 기준온도
   private static final Set<String> WINTER_MONTHS = Set.of("12", "01", "02");
 
@@ -71,18 +71,47 @@ public class NationalService {
 
   /* ---------- 전국 요약 ---------- */
 
+  // 기준 연도: 12개월이 모두 있는 가장 최근 연도 (진행 중인 연도는 제외, DB 에 없으면 작년)
+  private String getBaseYear() {
+    String year = gasMapper.getLatestFullYear();
+    return year != null ? year : String.valueOf(Year.now().getValue() - 1);
+  }
+
+  private String getPrevYear(String year) {
+    return String.valueOf(Integer.parseInt(year) - 1);
+  }
+
   // GET /api/national 응답 만들기
   public NationalDTO getNationalSummary() {
     List<GasDTO> monthly = gasMapper.getNationalMonthly();
     PyMapeDTO py = fetchMape();
+    String year = getBaseYear();
 
     return NationalDTO.builder()
-        .supplyYoy(getSupplyYoy())
+        .year(year)
+        .supplyYoy(getSupplyYoy(year))
+        .annual(getAnnualTrend())
         .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
-        .corr(getCorrMatrix(monthly))
+        .corr(calcCorrMatrix(monthly))
         .corrPeriod(getPeriod(monthly))
         .build();
+  }
+
+  // 연도별 추이: 12개월이 모두 있는 연도만, 전년 대비 증감률 포함 (첫 연도는 null)
+  private List<NationalYearDTO> getAnnualTrend() {
+    List<NationalYearDTO> result = new ArrayList<>();
+    Double prev = null;
+    for (GasDTO row : gasMapper.getNationalAnnual()) {
+      result.add(NationalYearDTO.builder()
+          .year(row.getYm())
+          .supply(StatUtils.round(row.getSupply() / 1000.0, 1))   // 천㎥ -> 백만㎥
+          .avgTemp(row.getAvgTemp())
+          .supplyYoy(prev == null ? null : calcYoy(row.getSupply(), prev))
+          .build());
+      prev = row.getSupply();
+    }
+    return result;
   }
 
   // 첫 달 ~ 마지막 달 (월별 데이터가 YM 오름차순이라는 전제)
@@ -92,8 +121,8 @@ public class NationalService {
   }
 
   // 전국 전년 대비 공급량 증감률(%)
-  private double getSupplyYoy() {
-    return calcYoy(gasMapper.getNationalAnnualSupply(YEAR), gasMapper.getNationalAnnualSupply(PREV_YEAR));
+  private double getSupplyYoy(String year) {
+    return calcYoy(gasMapper.getNationalAnnualSupply(year), gasMapper.getNationalAnnualSupply(getPrevYear(year)));
   }
 
   // 증감률(%), 소수점 첫째 자리 (전년 값이 없거나 0 이하면 0)
@@ -104,13 +133,13 @@ public class NationalService {
 
   // 전국 월별 데이터로 계산한 변수 간 상관계수 행렬
   // 산업생산은 DB에 없어서 제외
-  private List<List<Double>> getCorrMatrix(List<GasDTO> monthly) {
+  private List<List<Double>> calcCorrMatrix(List<GasDTO> monthly) {
     List<double[]> series = List.of(
-        toArray(monthly, GasDTO::getSupply),
-        toArray(monthly, GasDTO::getAvgTemp),
-        toArray(monthly, this::getHeatingDegreeDays),
-        toArray(monthly, GasDTO::getPopulation),
-        toArray(monthly, GasDTO::getHouseholdCnt)
+        toDoubleArray(monthly, GasDTO::getSupply),
+        toDoubleArray(monthly, GasDTO::getAvgTemp),
+        toDoubleArray(monthly, this::calcHeatingDegreeDays),
+        toDoubleArray(monthly, GasDTO::getPopulation),
+        toDoubleArray(monthly, GasDTO::getHouseholdCnt)
     );
 
     List<List<Double>> matrix = new ArrayList<>();
@@ -125,29 +154,32 @@ public class NationalService {
   }
 
   // 월 난방도일 = max(0, 기준온도 - 월평균기온) * 해당 월 일수
-  private double getHeatingDegreeDays(GasDTO gas) {
+  private double calcHeatingDegreeDays(GasDTO gas) {
     int days = YearMonth.parse(gas.getYm()).lengthOfMonth();
     return Math.max(0, HDD_BASE_TEMP - gas.getAvgTemp()) * days;
   }
 
-  private double[] toArray(List<GasDTO> list, ToDoubleFunction<GasDTO> getter) {
+  private double[] toDoubleArray(List<GasDTO> list, ToDoubleFunction<GasDTO> getter) {
     return list.stream().mapToDouble(getter).toArray();
   }
 
   /* ---------- 시·도별 지표 ---------- */
 
-  // GET /api/national/regions 응답: 17개 시도 목록 (공급량, 인구는 YEAR 기준 DB 집계)
+  // GET /api/national/regions 응답: 17개 시도 목록 (공급량, 인구는 기준 연도 DB 집계)
   public List<NationalRegionDTO> getRegions() {
+    String year = getBaseYear();
+    String prevYear = getPrevYear(year);
+
     Map<Long, List<GasDTO>> monthlyByRegion = gasMapper.getRegionMonthly().stream()
         .collect(Collectors.groupingBy(GasDTO::getRegionId));
 
-    Map<Long, Double> prevSupply = gasMapper.getRegionAnnualStats(PREV_YEAR).stream()
+    Map<Long, Double> prevSupply = gasMapper.getRegionAnnualStats(prevYear).stream()
         .collect(Collectors.toMap(GasDTO::getRegionId, GasDTO::getSupply));
 
     PyMapeDTO py = fetchMape();   // 지역별 예측 오차 (FastAPI)
 
     List<NationalRegionDTO> result = new ArrayList<>();
-    for (GasDTO row : gasMapper.getRegionAnnualStats(YEAR)) {
+    for (GasDTO row : gasMapper.getRegionAnnualStats(year)) {
       int regionId = row.getRegionId().intValue();
       if (regionId < 1 || regionId > 17) continue;
 
@@ -159,18 +191,18 @@ public class NationalService {
           .supply(StatUtils.round(row.getSupply() / 1000.0, 1))      // 천㎥ -> 백만㎥
           .supplyYoy(calcYoy(row.getSupply(), prevSupply.get(row.getRegionId())))
           .pop(StatUtils.round(row.getPopulation() / 10000.0, 1))    // 명 -> 만 명
-          .sensitivity(getSensitivity(monthly))
+          .sensitivity(calcSensitivity(monthly))
           .mape(findMape(py, REGION_NAMES[regionId]))   // FastAPI 모델의 실제 오차율(%)
-          .trend(getPopulationTrend(monthly))
-          .lo(getAvgTemp(monthly, "-01"))
-          .hi(getAvgTemp(monthly, "-08"))
+          .trend(calcPopulationTrend(monthly, year, prevYear))
+          .lo(getMonthlyAvgTemp(monthly, 1))
+          .hi(getMonthlyAvgTemp(monthly, 8))
           .build());
     }
     return result;
   }
 
   // 겨울(12~2월) 기온 1°C 하락 시 공급량 증가율(%): 공급량을 기온에 단순 회귀한 기울기 / 평균 공급량
-  private double getSensitivity(List<GasDTO> monthly) {
+  private double calcSensitivity(List<GasDTO> monthly) {
     List<GasDTO> winter = monthly.stream()
         .filter(g -> WINTER_MONTHS.contains(g.getYm().substring(5)))
         .toList();
@@ -181,10 +213,10 @@ public class NationalService {
     return StatUtils.round(-StatUtils.slope(temp, supply) / StatUtils.mean(supply) * 100, 1);
   }
 
-  // 인구 증감률(%/년): YEAR 월평균 인구 vs PREV_YEAR 월평균 인구
-  private double getPopulationTrend(List<GasDTO> monthly) {
-    double prev = getAvgPopulation(monthly, PREV_YEAR);
-    double curr = getAvgPopulation(monthly, YEAR);
+  // 인구 증감률(%/년): 기준 연도 월평균 인구 vs 전년 월평균 인구
+  private double calcPopulationTrend(List<GasDTO> monthly, String year, String prevYear) {
+    double prev = getAvgPopulation(monthly, prevYear);
+    double curr = getAvgPopulation(monthly, year);
     if (prev == 0) return 0.0;
     return StatUtils.round((curr - prev) / prev * 100, 1);
   }
@@ -196,8 +228,9 @@ public class NationalService {
         .average().orElse(0);
   }
 
-  // 전체 연도 중 특정 월(예: "-01")의 평균기온
-  private double getAvgTemp(List<GasDTO> monthly, String monthSuffix) {
+  // 전체 연도 중 특정 월(1~12)의 평균기온
+  private double getMonthlyAvgTemp(List<GasDTO> monthly, int month) {
+    String monthSuffix = String.format("-%02d", month);
     double avg = monthly.stream()
         .filter(g -> g.getYm().endsWith(monthSuffix))
         .mapToDouble(GasDTO::getAvgTemp)

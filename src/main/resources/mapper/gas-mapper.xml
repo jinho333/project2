@@ -36,6 +36,28 @@
     ORDER BY YM
   </select>
 
+  <!-- 전국 연도별 공급량 합계(천㎥)와 평균기온, 12개월이 모두 있는 연도만 (YM 칸에 연도를 담음) -->
+  <select id="getNationalAnnual" resultMap="gas">
+    SELECT LEFT(g.YM, 4) AS YM, SUM(g.SUPPLY) AS SUPPLY, ROUND(AVG(g.AVG_TEMP), 1) AS AVG_TEMP
+    FROM gas_monthly g
+    WHERE g.REGION_ID = 18
+    GROUP BY LEFT(g.YM, 4)
+    HAVING COUNT(*) = 12
+    ORDER BY LEFT(g.YM, 4)
+  </select>
+
+  <!-- 12개월이 모두 있는 가장 최근 연도 (진행 중인 연도는 제외), 없으면 null -->
+  <select id="getLatestFullYear" resultType="java.lang.String">
+    SELECT MAX(y)
+    FROM (
+      SELECT LEFT(YM, 4) AS y
+      FROM gas_monthly
+      WHERE REGION_ID = 18
+      GROUP BY LEFT(YM, 4)
+      HAVING COUNT(*) = 12
+    ) t
+  </select>
+
   <!-- 시·도 지표 API(/api/national/regions): 전국 페이지의 트리맵·도넛·막대가 사용 (NationalService) -->
   <!-- 시도별(18 제외) 연간 공급량 합계(천㎥), 인구 평균(명) -->
   <select id="getRegionAnnualStats" resultMap="gas">
