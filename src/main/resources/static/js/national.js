@@ -94,7 +94,7 @@
       D.kpi({ label: '전국 기온 민감도 (공급량 가중)', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
       // MAPE 는 비율이라 전분기와의 차이는 %p
       D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: '오차 경고 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
+      D.kpi({ label: '오차 큰 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
     ].join('');
   };
 
@@ -252,10 +252,10 @@
     const notes = [];
     if (warmestYear.year === lowYear.year) {
       notes.push(D.callout('blue', `${warmestYear.year}년: 가장 따뜻하고 공급량은 가장 적음`,
-        `평균기온 ${fmt(warmestYear.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lowYear.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 같은 방향입니다.`));
+        `평균기온 ${fmt(warmestYear.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lowYear.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 일치합니다.`));
     }
-    notes.push(D.callout('purple', '공급량 범위', `가장 많은 해 ${peakYear.year}년 ${fmt(peakYear.supply)}백만㎥, 가장 적은 해 ${lowYear.year}년 ${fmt(lowYear.supply)}백만㎥`));
-    notes.push(D.callout('blue', '참고', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
+    notes.push(D.callout('purple', '연도별 최대·최소', `가장 많은 해 ${peakYear.year}년 ${fmt(peakYear.supply)}백만㎥, 가장 적은 해 ${lowYear.year}년 ${fmt(lowYear.supply)}백만㎥ (${signed(((lowYear.supply - peakYear.supply) / peakYear.supply) * 100)}%)`));
+    notes.push(D.callout('blue', '해석 시 주의', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
     return notes.join('');
   };
 
@@ -375,8 +375,12 @@
   };
 
   // 페이지 맨 아래 데이터 안내: 기간, 기준 연도, 예측 오차 기준
-  const drawDataNote = ({ year, period }) => {
-    $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준, 연도별 추이는 12개월이 모두 있는 연도만 표시 · 예측 오차(MAPE)는 최근 12개월을 예측 모델로 다시 예측해 구한 값입니다.`;
+  const drawDataNote = ({ national, year, period, hasMape }) => {
+    // 마지막 달이 12월이 아니면 그 해는 진행 중이라 연간 비교에서 뺐다고 알림
+    const [endYear, endMonth] = (national.corrPeriod || '').split(' ~ ').pop().split('-').map(Number);
+    const partial = endMonth && endMonth < 12 ? ` (${endYear}년은 ${endMonth}월까지라 연간 비교에서 제외)` : '';
+    const mapeNote = hasMape ? '예측 오차(MAPE)는 최근 12개월을 예측 모델로 다시 예측해 구한 값입니다.' : '예측 오차(MAPE)는 예측 서버가 꺼져 있어 불러오지 못했습니다.';
+    $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준${partial}, 연도별 추이는 12개월이 모두 있는 연도만 표시 · ${mapeNote}`;
   };
 
   // 받아온 데이터로 화면 전체를 한 번 그림
