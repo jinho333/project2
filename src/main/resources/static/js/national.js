@@ -63,7 +63,7 @@
   // 상세 페이지는 공용 지역 목록(D.getRegions)의 id 로 지역을 찾으므로,
   // 전국 API 의 코드(se)가 아니라 공용 목록의 id(코드든 숫자든)를 이름으로 찾아서 씀
   let nationalRegions = [];
-  const go = id => {
+  const goToRegion = id => {
     const name = (nationalRegions.find(r => r.id === id) || {}).name;
     const shared = D.getRegions().find(r => r.name === name);
     location.href = D.url(`region?region=${shared ? shared.id : id}`);
@@ -73,14 +73,14 @@
   const summarize = (regions, national) => {
     const year = national.year;   // 기준 연도 (서버가 정함: 12개월이 모두 있는 가장 최근 연도)
     const total = sortedDesc(regions, 'supply').reduce((sum, r) => sum + r.supply, 0);
-    const sens = sortedDesc(regions, 'sensitivity');
-    const acc = sortedDesc(regions, 'mape');
+    const bySensitivity = sortedDesc(regions, 'sensitivity');
+    const byMape = sortedDesc(regions, 'mape');
     return {
-      regions, national, year, total, sens, acc,
+      regions, national, year, total, bySensitivity, byMape,
       prevYear: String(Number(year) - 1),
-      bad: acc.filter(r => r.mape > MAPE_LIMIT),   // 경고 지역
-      avgSens: weightedAvg(sens, 'sensitivity', total),
-      avgMape: weightedAvg(acc, 'mape', total),
+      overLimit: byMape.filter(r => r.mape > MAPE_LIMIT),   // 경고 지역
+      avgSens: weightedAvg(bySensitivity, 'sensitivity', total),
+      avgMape: weightedAvg(byMape, 'mape', total),
       period: toKoreanPeriod(national.corrPeriod)
     };
   };
@@ -88,13 +88,13 @@
   /* ---------- ③ 섹션별 그리기 (화면 순서와 같음) ---------- */
 
   // KPI 4개: 전년 대비, 전분기 대비는 서버가 계산해서 보내줌
-  const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, bad }) => {
+  const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit }) => {
     $('kpis').innerHTML = [
       D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
       D.kpi({ label: '전국 기온 민감도 (공급량 가중)', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
       // MAPE 는 비율이라 전분기와의 차이는 %p
       D.kpi({ label: `예측 오차율 (MAPE) ${TEMP_BADGE}`, value: fmt(avgMape, 1), unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: `오차 경고 지역 ${TEMP_BADGE}`, value: bad.length, unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과 (임시 기준)`, accent: 'var(--red-500)' })
+      D.kpi({ label: `오차 경고 지역 ${TEMP_BADGE}`, value: overLimit.length, unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과 (임시 기준)`, accent: 'var(--red-500)' })
     ].join('');
   };
 
@@ -102,26 +102,26 @@
   const drawTreemap = ({ regions, national, year, total }) => {
     const yoys = regions.map(r => r.supplyYoy);
     const yoyMin = Math.min(...yoys), yoyMax = Math.max(...yoys);
-    const pcAll = regions.map(percapOf).sort((a, b) => a - b);
-    const pcMin = pcAll[0], pcMax = pcAll[pcAll.length - 1];
+    const perCapitaSorted = regions.map(percapOf).sort((a, b) => a - b);
+    const perCapitaMin = perCapitaSorted[0], perCapitaMax = perCapitaSorted[perCapitaSorted.length - 1];
     // 제주·세종이 유난히 낮아서 최소~최대를 균등 분할하면 나머지가 두 색으로만 갈림 → 지역 수 기준 4분위로 나눔
-    const pcCuts = [1, 2, 3].map(k => pcAll[Math.floor((pcAll.length * k) / SEQ_COLORS.length)]);
+    const perCapitaCuts = [1, 2, 3].map(k => perCapitaSorted[Math.floor((perCapitaSorted.length * k) / SEQ_COLORS.length)]);
 
     let metric = 'yoy';
     const lastPaint = {};   // 지난번에 칠한 칸 (토글할 때 이전 색에서 새 색으로 이어지게)
 
     // 칸 하나의 색·글자색·문구 (면적 값은 공통)
     const tileOf = r => {
-      const pc = percapOf(r);
+      const perCapita = percapOf(r);
       const head = `<b>${r.name}</b>공급량 ${fmt(r.supply, 1)} 백만㎥ (${fmt((r.supply / total) * 100, 1)}%)<br>`;
-      const yoyText = `${signed(r.supplyYoy)}%`, pcText = `${fmt(pc)}㎥/인·년`;
+      const yoyText = `${signed(r.supplyYoy)}%`, perCapitaText = `${fmt(perCapita)}㎥/인·년`;
       const base = { id: r.id, label: r.name, value: r.supply };
       if (metric === 'yoy') {
         const step = Math.min(YOY_COLORS.length - 1, Math.floor(((r.supplyYoy - yoyMin) / (yoyMax - yoyMin || 1)) * YOY_COLORS.length));
-        return { ...base, color: YOY_COLORS[step], ink: inkOf(step, YOY_COLORS.length), note: yoyText, tip: `${head}전년 대비 ${yoyText}<br>1인당 ${pcText}` };
+        return { ...base, color: YOY_COLORS[step], ink: inkOf(step, YOY_COLORS.length), note: yoyText, tip: `${head}전년 대비 ${yoyText}<br>1인당 ${perCapitaText}` };
       }
-      const step = pcCuts.filter(c => pc >= c).length;
-      return { ...base, color: SEQ_COLORS[step], ink: inkOf(step, SEQ_COLORS.length), note: `${fmt(pc)}㎥`, tip: `${head}1인당 ${pcText}<br>전년 대비 ${yoyText}` };
+      const step = perCapitaCuts.filter(c => perCapita >= c).length;
+      return { ...base, color: SEQ_COLORS[step], ink: inkOf(step, SEQ_COLORS.length), note: `${fmt(perCapita)}㎥`, tip: `${head}1인당 ${perCapitaText}<br>전년 대비 ${yoyText}` };
     };
 
     // 토글로 바꿨을 때: 새로 그린 칸을 이전 색에서 새 색으로 0.3초 동안 전환
@@ -142,11 +142,11 @@
     // 색 범례: 어떤 색이 큰 값인지 알려줌
     const legendOf = () => metric === 'yoy'
       ? `<span>${signed(yoyMin)}%</span>${swatches(YOY_COLORS)}<span>${signed(yoyMax)}%</span><span class="tm-legend-note">전국 평균 ${signed(national.supplyYoy)}% · 진할수록 많이 증가 · 기온 영향 포함</span>`
-      : `<span>${fmt(pcMin)}㎥</span>${swatches(SEQ_COLORS)}<span>${fmt(pcMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역을 4등분해 색칠, 진할수록 많음</span>`;
+      : `<span>${fmt(perCapitaMin)}㎥</span>${swatches(SEQ_COLORS)}<span>${fmt(perCapitaMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역을 4등분해 색칠, 진할수록 많음</span>`;
 
     const render = animate => {
       const data = regions.map(tileOf);
-      D.renderTreemap($('treemap'), data, { unit: '', onSelect: go });
+      D.renderTreemap($('treemap'), data, { unit: '', onSelect: goToRegion });
       if (animate && !reduceMotion) fadeFromPrevious(data);
       else data.forEach(d => { lastPaint[d.id] = d; });
       $('treemapLegend').innerHTML = legendOf();
@@ -245,16 +245,16 @@
 
   // 연도별 추이 오른쪽 설명 박스: 숫자와 문장을 데이터에서 만듦
   const trendNotesOf = annual => {
-    const pick = (better, key) => annual.reduce((a, b) => (better(b[key], a[key]) ? b : a));
-    const hi = pick((x, y) => x > y, 'supply');
-    const lo = pick((x, y) => x < y, 'supply');
-    const warm = pick((x, y) => x > y, 'avgTemp');
+    const pickBy = (better, key) => annual.reduce((a, b) => (better(b[key], a[key]) ? b : a));
+    const peakYear = pickBy((x, y) => x > y, 'supply');
+    const lowYear = pickBy((x, y) => x < y, 'supply');
+    const warmestYear = pickBy((x, y) => x > y, 'avgTemp');
     const notes = [];
-    if (warm.year === lo.year) {
-      notes.push(D.callout('blue', `${warm.year}년: 가장 따뜻하고 공급량은 가장 적음`,
-        `평균기온 ${fmt(warm.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lo.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 같은 방향입니다.`));
+    if (warmestYear.year === lowYear.year) {
+      notes.push(D.callout('blue', `${warmestYear.year}년: 가장 따뜻하고 공급량은 가장 적음`,
+        `평균기온 ${fmt(warmestYear.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lowYear.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 같은 방향입니다.`));
     }
-    notes.push(D.callout('purple', '공급량 범위', `가장 많은 해 ${hi.year}년 ${fmt(hi.supply)}백만㎥, 가장 적은 해 ${lo.year}년 ${fmt(lo.supply)}백만㎥`));
+    notes.push(D.callout('purple', '공급량 범위', `가장 많은 해 ${peakYear.year}년 ${fmt(peakYear.supply)}백만㎥, 가장 적은 해 ${lowYear.year}년 ${fmt(lowYear.supply)}백만㎥`));
     notes.push(D.callout('blue', '참고', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
     return notes.join('');
   };
@@ -314,48 +314,48 @@
   };
 
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
-  const drawBars = ({ sens, acc, bad, avgSens }) => {
+  const drawBars = ({ bySensitivity, byMape, overLimit, avgSens }) => {
     // 민감도: 전국 평균보다 높으면 겨울색(파랑)으로 강조
     D.hbar($('sensChart'),
-      sens.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? C('--season-winter') : C('--seq-2') })),
-      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => go(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)' });
+      bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? C('--season-winter') : C('--seq-2') })),
+      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)' });
 
     // 예측 오차: 기준선을 넘으면 빨강
     D.hbar($('accChart'),
-      acc.map(r => ({ id: r.id, label: r.name, value: r.mape, color: r.mape > MAPE_LIMIT ? C('--red-500') : C('--stone') })),
-      { max: 14, ref: MAPE_LIMIT, refLabel: `임시 기준 ${MAPE_LIMIT}%`, onClick: d => go(d.id), showValue: true, axisTitle: 'MAPE (%)' });
-    $('badBadge').innerHTML = `<i class="dot"></i>${bad.length}곳 경고`;
+      byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: r.mape > MAPE_LIMIT ? C('--red-500') : C('--stone') })),
+      { max: 14, ref: MAPE_LIMIT, refLabel: `임시 기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: 'MAPE (%)' });
+    $('badBadge').innerHTML = `<i class="dot"></i>${overLimit.length}곳 경고`;
     // MAPE 가 아직 임시값이라 원인을 단정하는 문구는 넣지 않음. 지역 이름은 데이터에서 뽑음
-    $('accCallout').innerHTML = bad.length
-      ? D.callout('red', '경고 지역', `${bad.map(r => r.name).join('·')} — 임시 MAPE 기준입니다. 실제 예측 오차를 연동하면 달라질 수 있습니다.`)
+    $('accCallout').innerHTML = overLimit.length
+      ? D.callout('red', '경고 지역', `${overLimit.map(r => r.name).join('·')} — 임시 MAPE 기준입니다. 실제 예측 오차를 연동하면 달라질 수 있습니다.`)
       : D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
   };
 
   // 히트맵 옆 설명 박스: r 값과 문장을 서버가 보낸 상관계수에서 만듦
   const corrNotesOf = ({ corrLabels, corr }) => {
-    const r = (a, b) => {
+    const corrOf = (a, b) => {
       const i = corrLabels.indexOf(a), j = corrLabels.indexOf(b);
       return i < 0 || j < 0 ? null : corr[i][j];
     };
     const notes = [];
-    const rHdd = r('공급량', '난방도일'), rTemp = r('공급량', '평균기온');
-    if (rHdd !== null) {
-      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${corrText(rHdd)}`,
-        rTemp !== null && Math.abs(rHdd) > Math.abs(rTemp)
-          ? `기온(r = ${corrText(rTemp)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.`
+    const corrSupplyHdd = corrOf('공급량', '난방도일'), corrSupplyTemp = corrOf('공급량', '평균기온');
+    if (corrSupplyHdd !== null) {
+      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${corrText(corrSupplyHdd)}`,
+        corrSupplyTemp !== null && Math.abs(corrSupplyHdd) > Math.abs(corrSupplyTemp)
+          ? `기온(r = ${corrText(corrSupplyTemp)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.`
           : '난방도일(18°C 기준)과 기온 모두 공급량과 비슷한 수준으로 연동됩니다.'));
     }
-    const rPop = r('인구', '세대수');
-    if (rPop !== null) {
-      notes.push(D.callout('purple', `인구 ↔ 세대수 r = ${corrText(rPop)}`,
-        Math.abs(rPop) >= 0.9
-          ? `${rPop < 0 ? '서로 반대로 움직이지만 ' : ''}상관이 매우 강해 거의 같은 정보를 담고 있어, 함께 쓰면 정보가 중복됩니다.`
+    const corrPopHousehold = corrOf('인구', '세대수');
+    if (corrPopHousehold !== null) {
+      notes.push(D.callout('purple', `인구 ↔ 세대수 r = ${corrText(corrPopHousehold)}`,
+        Math.abs(corrPopHousehold) >= 0.9
+          ? `${corrPopHousehold < 0 ? '서로 반대로 움직이지만 ' : ''}상관이 매우 강해 거의 같은 정보를 담고 있어, 함께 쓰면 정보가 중복됩니다.`
           : '두 변수의 상관이 강하지 않아 각각 별개의 정보로 볼 수 있습니다.'));
     }
     // 월별 공급량은 계절 변동이 커서, 상관이 낮다고 '영향 없음'으로 읽으면 오해이므로 안내
-    const rSupPop = r('공급량', '인구');
-    if (rSupPop !== null && Math.abs(rSupPop) < 0.3) {
-      notes.push(D.callout('blue', `공급량 ↔ 인구 r = ${corrText(rSupPop)}`,
+    const corrSupplyPop = corrOf('공급량', '인구');
+    if (corrSupplyPop !== null && Math.abs(corrSupplyPop) < 0.3) {
+      notes.push(D.callout('blue', `공급량 ↔ 인구 r = ${corrText(corrSupplyPop)}`,
         '월별 공급량은 계절 변동이 커서, 인구의 영향이 이 수치에는 잘 드러나지 않을 수 있습니다.'));
     }
     return notes.join('');
@@ -375,14 +375,14 @@
 
   // 받아온 데이터로 화면 전체를 한 번 그림
   const draw = (regions, national) => {
-    const s = summarize(regions, national);
-    drawKpis(s);
-    drawTreemap(s);
-    drawDonut(s);
-    drawTrend(s);
-    drawBars(s);
-    drawCorrelation(s);
-    drawDataNote(s);
+    const summary = summarize(regions, national);
+    drawKpis(summary);
+    drawTreemap(summary);
+    drawDonut(summary);
+    drawTrend(summary);
+    drawBars(summary);
+    drawCorrelation(summary);
+    drawDataNote(summary);
     D.icons();   // 새로 그린 HTML 안의 아이콘 표시
   };
 

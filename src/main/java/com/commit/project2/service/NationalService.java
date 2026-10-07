@@ -65,7 +65,7 @@ public class NationalService {
         .annual(getAnnualTrend())
         .mapeDelta(-0.8)  // TODO 예측 모델 연동 전까지 임시값
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
-        .corr(getCorrMatrix(monthly))
+        .corr(calcCorrMatrix(monthly))
         .corrPeriod(getPeriod(monthly))
         .build();
   }
@@ -105,13 +105,13 @@ public class NationalService {
 
   // 전국 월별 데이터로 계산한 변수 간 상관계수 행렬
   // 산업생산은 DB에 없어서 제외
-  private List<List<Double>> getCorrMatrix(List<GasDTO> monthly) {
+  private List<List<Double>> calcCorrMatrix(List<GasDTO> monthly) {
     List<double[]> series = List.of(
-        toArray(monthly, GasDTO::getSupply),
-        toArray(monthly, GasDTO::getAvgTemp),
-        toArray(monthly, this::getHeatingDegreeDays),
-        toArray(monthly, GasDTO::getPopulation),
-        toArray(monthly, GasDTO::getHouseholdCnt)
+        toDoubleArray(monthly, GasDTO::getSupply),
+        toDoubleArray(monthly, GasDTO::getAvgTemp),
+        toDoubleArray(monthly, this::calcHeatingDegreeDays),
+        toDoubleArray(monthly, GasDTO::getPopulation),
+        toDoubleArray(monthly, GasDTO::getHouseholdCnt)
     );
 
     List<List<Double>> matrix = new ArrayList<>();
@@ -126,12 +126,12 @@ public class NationalService {
   }
 
   // 월 난방도일 = max(0, 기준온도 - 월평균기온) * 해당 월 일수
-  private double getHeatingDegreeDays(GasDTO gas) {
+  private double calcHeatingDegreeDays(GasDTO gas) {
     int days = YearMonth.parse(gas.getYm()).lengthOfMonth();
     return Math.max(0, HDD_BASE_TEMP - gas.getAvgTemp()) * days;
   }
 
-  private double[] toArray(List<GasDTO> list, ToDoubleFunction<GasDTO> getter) {
+  private double[] toDoubleArray(List<GasDTO> list, ToDoubleFunction<GasDTO> getter) {
     return list.stream().mapToDouble(getter).toArray();
   }
 
@@ -161,18 +161,18 @@ public class NationalService {
           .supply(StatUtils.round(row.getSupply() / 1000.0, 1))      // 천㎥ -> 백만㎥
           .supplyYoy(calcYoy(row.getSupply(), prevSupply.get(row.getRegionId())))
           .pop(StatUtils.round(row.getPopulation() / 10000.0, 1))    // 명 -> 만 명
-          .sensitivity(getSensitivity(monthly))
+          .sensitivity(calcSensitivity(monthly))
           .mape(MOCK_MAPE[regionId])
-          .trend(getPopulationTrend(monthly, year, prevYear))
-          .lo(getAvgTemp(monthly, "-01"))
-          .hi(getAvgTemp(monthly, "-08"))
+          .trend(calcPopulationTrend(monthly, year, prevYear))
+          .lo(getMonthlyAvgTemp(monthly, 1))
+          .hi(getMonthlyAvgTemp(monthly, 8))
           .build());
     }
     return result;
   }
 
   // 겨울(12~2월) 기온 1°C 하락 시 공급량 증가율(%): 공급량을 기온에 단순 회귀한 기울기 / 평균 공급량
-  private double getSensitivity(List<GasDTO> monthly) {
+  private double calcSensitivity(List<GasDTO> monthly) {
     List<GasDTO> winter = monthly.stream()
         .filter(g -> WINTER_MONTHS.contains(g.getYm().substring(5)))
         .toList();
@@ -184,7 +184,7 @@ public class NationalService {
   }
 
   // 인구 증감률(%/년): 기준 연도 월평균 인구 vs 전년 월평균 인구
-  private double getPopulationTrend(List<GasDTO> monthly, String year, String prevYear) {
+  private double calcPopulationTrend(List<GasDTO> monthly, String year, String prevYear) {
     double prev = getAvgPopulation(monthly, prevYear);
     double curr = getAvgPopulation(monthly, year);
     if (prev == 0) return 0.0;
@@ -198,8 +198,9 @@ public class NationalService {
         .average().orElse(0);
   }
 
-  // 전체 연도 중 특정 월(예: "-01")의 평균기온
-  private double getAvgTemp(List<GasDTO> monthly, String monthSuffix) {
+  // 전체 연도 중 특정 월(1~12)의 평균기온
+  private double getMonthlyAvgTemp(List<GasDTO> monthly, int month) {
+    String monthSuffix = String.format("-%02d", month);
     double avg = monthly.stream()
         .filter(g -> g.getYm().endsWith(monthSuffix))
         .mapToDouble(GasDTO::getAvgTemp)

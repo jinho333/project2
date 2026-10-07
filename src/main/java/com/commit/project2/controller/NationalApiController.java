@@ -16,7 +16,7 @@ import java.util.List;
 public class NationalApiController {
   private final NationalService nationalService;
 
-  // ③ GET /api/national -> 전국 요약 (전년 대비 증감률, 상관계수 표)
+  // GET /api/national -> 전국 요약 (기준 연도, 전년 대비 증감률, 연도별 추이, 상관계수 표)
   @GetMapping
   public NationalDTO getNationalSummary() {
     return nationalService.getNationalSummary();
