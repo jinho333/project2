@@ -232,7 +232,7 @@
     // 정확도 낮은 지역
     // 기준선 8%: 넘으면 빨강
     D.hbar($('accChart'), acc.map(r => ({ id: r.id, label: r.name, value: r.mape, color: r.mape > 8 ? C('--red-500') : C('--stone') })),
-      { max: 14, ref: 8, refLabel: '기준 8%', onClick: d => go(d.id), showValue: true, axisTitle: 'MAPE (%)' });
+      { max: 14, ref: 8, refLabel: '임시 기준 8%', onClick: d => go(d.id), showValue: true, axisTitle: 'MAPE (%)' });
     $('badBadge').innerHTML = `<i class="dot"></i>${bad.length}곳 경고`;
     // 경고 지역 이름은 데이터에서 뽑음 (예전에는 '세종·제주·울산' 이 문장에 고정으로 적혀 있었음)
     // MAPE 는 아직 서버의 임시값이라 원인을 단정하는 문구는 넣지 않음
