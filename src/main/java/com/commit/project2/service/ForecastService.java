@@ -3,6 +3,7 @@ package com.commit.project2.service;
 import com.commit.project2.dto.*;
 import com.commit.project2.mapper.RegionMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -54,5 +55,18 @@ public class ForecastService {
       }
     }
     return result;
+  }
+
+  public SimulationDTO getSimulation(Long regionId, SimulationReqDTO reqDTO) {
+    // 1 → '서울'
+    String regionName = regionMapper.getRegionName(regionId);
+
+    // FastAPI 의 POST /simulation?region=서울 호출, 화면에서 받은 body 를 그대로 전달
+    return restClient.post()
+            .uri("/simulation?region={region}", regionName)
+            .contentType(MediaType.APPLICATION_JSON)   // body 가 JSON 이라고 알려줌
+            .body(reqDTO)                              // DTO → JSON 으로 바뀌어 전송됨
+            .retrieve()
+            .body(SimulationDTO.class);
   }
 }
