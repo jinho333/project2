@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+// 전국 통계 페이지(national.js)가 부르는 API. 계산은 NationalService 가 하고, 여기서는 주소와 서비스만 이어줌
+// 화면 주소(/national)는 DashboardController 가 맡음
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/national")

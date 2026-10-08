@@ -6,6 +6,14 @@
  *   → 기온 민감도 + 예측 오차(막대) → 상관계수(히트맵) → 데이터 안내
  * 코드 구성: ① 상수  ② 계산·표시 도구  ③ 섹션별 그리기(화면 순서와 같음)  ④ 시작
  *
+ * 용어 (처음 보면 헷갈리는 것)
+ *   MAPE      예측 오차율. 예측이 실제와 평균 몇 % 다른지 (낮을수록 정확). FastAPI 값
+ *   기온 민감도  기온이 1°C 내려갈 때 공급량이 몇 % 늘어나는지 (%/°C). FastAPI 값
+ *   상관계수 r  -1 ~ +1. +1 에 가까우면 같이 늘고 줄고, -1 에 가까우면 반대로 움직임, 0 이면 관계가 안 보임
+ *   전년 동월 대비  '작년 같은 달' 과의 차이. 겨울에 많고 여름에 적은 계절 패턴을 빼고 보려고 씀
+ *   난방도일    기준온도(18°C)보다 추운 정도 × 일수. 추울수록 커지는 난방 수요 지표
+ *   FastAPI 값은 예측 서버가 꺼져 있으면 null 로 옴 → 화면은 '–' 와 안내 문구로 대신함
+ *
  * 사용하는 API (응답 모양은 common.js 맨 위 API 목록 참고)
  *   GET /api/regions            시·도별 지표 (공용 지역 목록, RegionSummaryDTO). D.loadRegions() 가 받아옴
  *   GET /api/national           전국 요약: 기준 연도, 증감률, 연도별 추이, 상관계수 (NationalDTO)
@@ -95,11 +103,12 @@
   };
 
   // 지역 클릭 → 지역 상세 페이지 (/region?region=id)
-  // 상세 페이지는 공용 지역 목록(D.getRegions)의 id 로 지역을 찾으므로,
-  // 지역 상세 페이지로 이동 (전국 API 의 id 는 공용 /api/regions 와 같은 지역 번호)
+  // 상세 페이지는 공용 지역 목록(D.getRegions)의 id 로 지역을 찾으므로, 전국 API 의 id 도 같은 지역 번호(DB REGION_ID)를 씀
   const goToRegion = id => { location.href = D.url(`region?region=${id}`); };
 
-  // 여러 섹션이 같이 쓰는 값을 한 번만 계산
+  // 여러 섹션이 같이 쓰는 값을 한 번만 계산해서 섹션 그리기 함수들(drawKpis, drawTreemap ...)에 똑같이 넘겨줌
+  //   total 전국 공급량 합계 / bySensitivity·byMape 값이 큰 순 목록 / hasSens·hasMape FastAPI 값을 받았는지
+  //   overLimit MAPE 경고 기준을 넘은 지역 / avgSens·avgMape 전국 대표값
   const summarize = (regions, national) => {
     const year = national.year;   // 기준 연도 (서버가 정함: 12개월이 모두 있는 가장 최근 연도)
     const total = sortedDesc(regions, 'supply').reduce((sum, r) => sum + r.supply, 0);
@@ -151,6 +160,7 @@
       const yoyText = pctText(r.supplyYoy), perCapitaText = `${fmt(perCapita)}㎥/인·년`;
       const base = { id: r.id, label: esc(r.name), value: r.supply };
       if (metric === 'yoy') {
+        // 증감률을 (최소 ~ 최대) 범위 안의 위치(0~1)로 바꾼 뒤 색 단계(0~3)로 나눔. 최대 = 최소이면 0으로 나누지 않게 1로 대신함
         const step = Number.isFinite(r.supplyYoy) ? Math.min(YOY_COLORS.length - 1, Math.floor(((r.supplyYoy - yoyMin) / (yoyMax - yoyMin || 1)) * YOY_COLORS.length)) : 0;
         return { ...base, color: YOY_COLORS[step], ink: inkOf(step, YOY_COLORS.length), note: yoyText, tip: `${head}전년 대비 ${yoyText}<br>1인당 ${perCapitaText}` };
       }
@@ -266,6 +276,7 @@
 
   // 연도별 추이 오른쪽 설명 박스: 숫자와 문장을 데이터에서 만듦
   const trendNotesOf = annual => {
+    // 연도 목록에서 key 값이 가장 큰(또는 작은) 해 하나 고르기. better(새 값, 지금까지 1등 값) 이 true 면 새 해로 교체
     const pickBy = (better, key) => annual.reduce((a, b) => (better(b[key], a[key]) ? b : a));
     const peakYear = pickBy((x, y) => x > y, 'supply');
     const lowYear = pickBy((x, y) => x < y, 'supply');
@@ -374,9 +385,12 @@
     });
   };
 
-  // 월별 곡선: 연도마다 선 하나. 기준 연도는 진한 파랑, 나머지 완결 연도는 연한 파랑, 진행 중인 연도는 노랑으로 강조
+  // 추이 카드의 보기 스위치 (drawTrend 가 실행될 때는 이미 이 줄이 지나갔으므로 위에서 써도 괜찮음)
   const TREND_VIEWS = [{ id: 'year', label: '연도별' }, { id: 'month', label: '월별' }];
+
+  // 월별 곡선: 연도마다 선 하나. 기준 연도는 진한 파랑, 나머지 완결 연도는 연한 파랑, 진행 중인 연도는 노랑으로 강조
   const drawMonthChart = (monthly, year, ytd) => {
+    // 서버의 월별 줄 [{ ym: '2025-03', supply }] 을 연도별 12칸 배열로 바꿈: { '2025': [1월, 2월, ... 12월] } (없는 달은 null → 선이 끊김)
     const byYear = {};
     monthly.forEach(m => {
       const [y, mo] = m.ym.split('-');
@@ -677,6 +691,7 @@
 
   /* ---------- ④ 시작: 데이터를 받아온 뒤 그리기 ---------- */
 
+  // 실패하면 어느 API 인지 알려주고 멈춤 (D.showError). 둘 다 받아야 그릴 수 있어서 하나씩 차례로 받음
   const init = async () => {
     // 데이터를 받아오는 동안 KPI 자리에 빈 카드를 보여줌 (실패하면 지움)
     $('kpis').innerHTML = '<div class="kpi kpi-skeleton" aria-hidden="true"></div>'.repeat(5);
