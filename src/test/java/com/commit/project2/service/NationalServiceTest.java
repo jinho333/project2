@@ -144,12 +144,16 @@ class NationalServiceTest {
     assertEquals("2023-01 ~ 2024-06", summary.getCorrPeriod());
     assertNotNull(summary.getCorr());
     assertNotNull(summary.getCorrYoy());
-    // 모든 값이 -1 ~ 1 사이의 유한한 숫자
+    // 값이 있는 칸은 -1 ~ 1 사이의 유한한 숫자 (인구·세대수처럼 변화량이 늘 같은 변수는 계산할 수 없어 null)
     for (List<Double> row : summary.getCorrYoy()) {
       for (Double v : row) {
-        assertTrue(Double.isFinite(v) && v >= -1.0 && v <= 1.0, "상관계수가 범위를 벗어남: " + v);
+        assertTrue(v == null || (Double.isFinite(v) && v >= -1.0 && v <= 1.0), "상관계수가 범위를 벗어남: " + v);
       }
     }
+    assertNotNull(summary.getCorr().get(0).get(1), "원본 상관은 전체 월로 계산되므로 값이 있어야 함");
+    // 이 테스트 데이터는 기온·인구가 매달 일정하게 변해서 작년 대비 변화량이 늘 같음 → 전년 동월 대비 상관은 계산할 수 없음 (이전에는 0.0 으로 잘못 보였음)
+    assertNull(summary.getCorrYoy().get(0).get(1));
+    assertNull(summary.getCorrYoy().get(0).get(3));
   }
 
   @Test
