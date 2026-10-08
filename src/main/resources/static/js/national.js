@@ -103,7 +103,7 @@
       hasMape: regions.some(r => r.mape !== null && r.mape !== undefined),   // 예측 서버(FastAPI)가 꺼져 있으면 MAPE 가 비어서(null) 옴
       overLimit: byMape.filter(r => r.mape > MAPE_LIMIT),   // 경고 지역
       avgSens: weightedAvg(bySensitivity, 'sensitivity', total),
-      avgMape: weightedAvg(byMape, 'mape', total),
+      avgMape: national.mape ?? weightedAvg(byMape, 'mape', total),   // 서버(FastAPI)의 전국 값 우선, 없으면 지역 값의 공급량 가중 평균
       period: toKoreanPeriod(national.corrPeriod)
     };
   };

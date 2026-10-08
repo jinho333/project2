@@ -91,6 +91,7 @@ public class NationalService {
         .annual(getAnnualTrend())
         .monthly(getMonthlySeries(monthly))
         .ytd(getYtd(monthly))
+        .mape(findMape(py, "전국"))                      // FastAPI 가 계산한 전국 MAPE (지역 값의 평균과 다를 수 있음)
         .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
         .corr(calcCorrMatrix(monthly, false))
