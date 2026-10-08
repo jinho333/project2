@@ -37,6 +37,7 @@
   ];
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;   // 켜져 있으면 애니메이션 없이 바로 바뀜
+  if (reduceMotion && window.Chart) Chart.defaults.animation = false;   // 모든 차트(막대, 추이, 월별 곡선 포함)에 한 번에 적용
 
   /* ---------- ② 계산·표시 도구 ---------- */
 
@@ -77,10 +78,10 @@
   const toKoreanPeriod = period => (period || '').split(' ~ ')
     .map(ym => ym.replace(/^(\d{4})-(\d{2})$/, (_, y, m) => `${y}년 ${+m}월`)).join(' ~ ');
 
-  // '#rrggbb' → 투명도 0.3 인 rgba (호버하지 않은 도넛 조각을 흐리게)
-  const fade = hex => {
-    const m = /^#([0-9a-f]{6})$/i.exec(hex);
-    if (!m) return hex;
+  // 색 → 투명도 0.3 (호버하지 않은 도넛 조각, 연동되지 않은 막대를 흐리게). '#rrggbb' 외의 색(color-mix 등)도 처리
+  const fade = color => {
+    const m = /^#([0-9a-f]{6})$/i.exec(color);
+    if (!m) return `color-mix(in srgb, ${color} 30%, transparent)`;
     const n = parseInt(m[1], 16);
     return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},0.3)`;
   };
@@ -428,14 +429,40 @@
   const bandLegend = (colors, lowText, highText) =>
     `${lowText}${colors.map(c => `<i style="background:${c}"></i>`).join('')}${highText}<span class="tm-legend-note">4분위 (순위 기준)</span>`;
 
+  // 지역 연동: 트리맵 칸이나 막대에 올리면 같은 지역이 모든 차트에서 함께 강조되고 나머지는 흐려짐 (id = 지역 번호, 벗어나면 null)
+  //   bars = [{ chart, items }]  items = 그 차트의 막대 목록 [{ id, color }]
+  const linkRegions = bars => {
+    const treemap = $('treemap');
+    let active = null;
+    const setActive = id => {
+      if (id === active) return;
+      active = id;
+      treemap.classList.toggle('has-link', id !== null);
+      treemap.querySelectorAll('.tm-cell').forEach(c => c.classList.toggle('is-linked', id !== null && Number(c.dataset.id) === id));
+      bars.forEach(({ chart, items }) => {
+        chart.data.datasets[0].backgroundColor = items.map(d => (id === null || d.id === id) ? d.color : fade(d.color));
+        chart.update('none');
+      });
+    };
+    // 트리맵은 색 기준을 바꾸면 칸이 새로 그려지므로 칸마다 붙이지 않고 바깥 상자에서 한 번만 받음
+    treemap.onmouseover = e => { const cell = e.target.closest('.tm-cell'); if (cell) setActive(Number(cell.dataset.id)); };
+    treemap.onmouseleave = () => setActive(null);
+    // focusin/focusout 은 on... 속성이 없어서 addEventListener 로 붙임 (키보드로 칸에 이동해도 같은 연동)
+    treemap.addEventListener('focusin', e => { const cell = e.target.closest('.tm-cell'); if (cell) setActive(Number(cell.dataset.id)); });
+    treemap.addEventListener('focusout', () => setActive(null));
+    bars.forEach(({ chart }) => { chart.canvas.onmouseleave = () => setActive(null); });   // 차트의 onHover 는 차트 안에서만 불려서 벗어남은 따로 처리
+    return setActive;
+  };
+
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
   const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape }) => {
     // 민감도: 높을수록 진한 파랑 (4구간). 전국 평균은 기준선으로 따로 표시
     const sensColors = ['--seq-2', '--seq-3', '--seq-4', '--seq-5'].map(v => C(v));
     const sensBand = bandsOf(bySensitivity);
-    D.hbar($('sensChart'),
-      bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` })),
-      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
+    let setLinked = () => {};   // 두 차트를 다 만든 뒤 아래에서 연결
+    const sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
+    const sensChart = D.hbar($('sensChart'), sensItems,
+      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
     $('sensLegend').innerHTML = bandLegend(sensColors, '민감도 낮음', '높음');
     const lowest = bySensitivity[bySensitivity.length - 1];
     $('sensNote').innerHTML = D.callout('blue', '해석 시 주의', `겨울철 월별 자료로 추정한 값이라 표본이 적습니다. 가장 낮은 ${lowest.name}(${fmt(lowest.sensitivity, 1)}%)처럼 극단 값은 참고용으로 보세요.`);
@@ -445,9 +472,10 @@
     // 오차: 클수록 노랑 → 빨강 (4구간). 예측 오차를 못 받아오면 순위를 알 수 없어 한 색으로 둠
     const mapeColors = [C('--yellow-500'), `color-mix(in srgb, ${C('--yellow-500')}, ${C('--red-500')})`, C('--red-500'), C('--div-pos-3')];
     const mapeBand = bandsOf(byMape);
-    D.hbar($('accChart'),
-      byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` })),
-      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: 'MAPE (%)', barThickness: 16 });
+    const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
+    const accChart = D.hbar($('accChart'), accItems,
+      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: 'MAPE (%)', barThickness: 16 });
+    setLinked = linkRegions([{ chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }]);
     $('accLegend').innerHTML = hasMape ? bandLegend(mapeColors, '오차 작음', '큼') : '';
     $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>${overLimit.length}곳 경고` : '';
     $('badBadge').hidden = !hasMape;
@@ -571,21 +599,27 @@
   /* ---------- ④ 시작: 데이터를 받아온 뒤 그리기 ---------- */
 
   const init = async () => {
+    // 데이터를 받아오는 동안 KPI 자리에 빈 카드를 보여줌 (실패하면 지움)
+    $('kpis').innerHTML = '<div class="kpi kpi-skeleton" aria-hidden="true"></div>'.repeat(5);
+    $('kpis').setAttribute('aria-busy', 'true');
     await D.loadRegions().catch(() => {});   // 공용 지역 목록: 상단 검색창과 지역 이동에 쓰임 (실패해도 이 페이지는 그대로 그림)
     let regions, national;
     try {
       regions = (await axios.get(D.url('api/national/regions'))).data;
     } catch (err) {
+      $('kpis').innerHTML = '';
       D.showError(err, '지역 목록');
       return;
     }
     try {
       national = (await axios.get(D.url('api/national'))).data;
     } catch (err) {
+      $('kpis').innerHTML = '';
       D.showError(err, '전국 요약');
       return;
     }
     draw(regions, national);
+    $('kpis').removeAttribute('aria-busy');
   };
 
   init();
