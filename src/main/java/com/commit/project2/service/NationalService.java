@@ -36,10 +36,6 @@ public class NationalService {
   private static final Set<String> WINTER_MONTHS = Set.of("12", "01", "02");
 
   // 인덱스 = REGION_ID (0은 비움, 18 전국은 제외)
-  private static final String[] REGION_CODES = {
-      "", "se", "bs", "dg", "ic", "gj", "dj", "us", "sj",
-      "gg", "gw", "cb", "cn", "jb", "jn", "gb", "gn", "jj"
-  };
   private static final String[] REGION_NAMES = {
       "", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
       "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"
@@ -64,7 +60,7 @@ public class NationalService {
   private Double findMape(PyMapeDTO py, String regionName) {
     if (py == null || py.getItems() == null) return null;
     for (PyMapeItemDTO item : py.getItems()) {
-      if (item.getRegion().equals(regionName)) {
+      if (item != null && regionName.equals(item.getRegion())) {
         return item.getMape();
       }
     }
@@ -85,7 +81,7 @@ public class NationalService {
 
   // GET /api/national 응답 만들기
   public NationalDTO getNationalSummary() {
-    List<GasDTO> monthly = gasMapper.getNationalMonthly();
+    List<GasDTO> monthly = usableRows(gasMapper.getNationalMonthly());
     PyMapeDTO py = fetchMape();
     String year = getBaseYear();
 
@@ -95,6 +91,7 @@ public class NationalService {
         .annual(getAnnualTrend())
         .monthly(getMonthlySeries(monthly))
         .ytd(getYtd(monthly))
+        .mape(findMape(py, "전국"))                      // FastAPI 가 계산한 전국 MAPE (지역 값의 평균과 다를 수 있음)
         .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
         .corr(calcCorrMatrix(monthly, false))
@@ -160,6 +157,19 @@ public class NationalService {
         .build();
   }
 
+  // 계산에 쓸 수 있는 줄만 남김: 연월이 'YYYY-MM' 모양이고 기온·공급량·인구·세대수가 모두 있는 줄
+  // DB 에 빈 값이 한 줄만 섞여 있어도 서버 전체가 오류(500)가 나지 않게 하는 방어
+  private List<GasDTO> usableRows(List<GasDTO> rows) {
+    if (rows == null) return List.of();
+    return rows.stream().filter(this::isUsable).toList();
+  }
+
+  private boolean isUsable(GasDTO g) {
+    return g != null && g.getYm() != null && g.getYm().matches("\\d{4}-\\d{2}")
+        && g.getAvgTemp() != null && g.getSupply() != null
+        && g.getPopulation() != null && g.getHouseholdCnt() != null;
+  }
+
   // 첫 달 ~ 마지막 달 (월별 데이터가 YM 오름차순이라는 전제)
   private String getPeriod(List<GasDTO> monthly) {
     if (monthly.isEmpty()) return "";
@@ -167,13 +177,14 @@ public class NationalService {
   }
 
   // 전국 전년 대비 공급량 증감률(%)
-  private double getSupplyYoy(String year) {
+  private Double getSupplyYoy(String year) {
     return calcYoy(gasMapper.getNationalAnnualSupply(year), gasMapper.getNationalAnnualSupply(getPrevYear(year)));
   }
 
   // 증감률(%), 소수점 첫째 자리 (전년 값이 없거나 0 이하면 0)
-  private double calcYoy(Double curr, Double prev) {
-    if (prev == null || curr == null || prev <= 0) return 0.0;
+  // 비교할 값이 없거나 0 이하이면 null (0.0 으로 두면 '변화 없음' 으로 잘못 읽힘)
+  private Double calcYoy(Double curr, Double prev) {
+    if (prev == null || curr == null || prev <= 0) return null;
     return StatUtils.round((curr - prev) / prev * 100, 1);
   }
 
@@ -197,11 +208,18 @@ public class NationalService {
     for (double[] row : series) {
       List<Double> line = new ArrayList<>();
       for (double[] col : series) {
-        line.add(StatUtils.round(StatUtils.corr(row, col), 2));
+        line.add(safeCorr(row, col));
       }
       matrix.add(line);
     }
     return matrix;
+  }
+
+  // 상관계수 (소수 2자리). 값이 2개 미만이거나 한쪽 값이 모두 같아서 계산할 수 없으면 null
+  private Double safeCorr(double[] x, double[] y) {
+    if (x.length < 2 || x.length != y.length) return null;
+    double r = StatUtils.corr(x, y);
+    return Double.isFinite(r) ? StatUtils.round(r, 2) : null;
   }
 
   // 각 달의 "작년 같은 달" 위치 번호 (없으면 -1)
@@ -242,23 +260,27 @@ public class NationalService {
     String year = getBaseYear();
     String prevYear = getPrevYear(year);
 
-    Map<Long, List<GasDTO>> monthlyByRegion = gasMapper.getRegionMonthly().stream()
+    Map<Long, List<GasDTO>> monthlyByRegion = usableRows(gasMapper.getRegionMonthly()).stream()
+        .filter(g -> g.getRegionId() != null)
         .collect(Collectors.groupingBy(GasDTO::getRegionId));
 
+    // toMap 은 값이 null 이면 오류가 나므로 지역 번호·공급량이 있는 줄만 사용
     Map<Long, Double> prevSupply = gasMapper.getRegionAnnualStats(prevYear).stream()
-        .collect(Collectors.toMap(GasDTO::getRegionId, GasDTO::getSupply));
+        .filter(g -> g.getRegionId() != null && g.getSupply() != null)
+        .collect(Collectors.toMap(GasDTO::getRegionId, GasDTO::getSupply, (first, second) -> first));
 
     PyMapeDTO py = fetchMape();   // 지역별 예측 오차 (FastAPI)
 
     List<NationalRegionDTO> result = new ArrayList<>();
     for (GasDTO row : gasMapper.getRegionAnnualStats(year)) {
+      if (row.getRegionId() == null || row.getSupply() == null || row.getPopulation() == null) continue;
       int regionId = row.getRegionId().intValue();
       if (regionId < 1 || regionId > 17) continue;
 
       List<GasDTO> monthly = monthlyByRegion.getOrDefault(row.getRegionId(), List.of());
 
       result.add(NationalRegionDTO.builder()
-          .id(REGION_CODES[regionId])
+          .id(regionId)
           .name(REGION_NAMES[regionId])
           .supply(StatUtils.round(row.getSupply() / 1000.0, 1))      // 천㎥ -> 백만㎥
           .supplyYoy(calcYoy(row.getSupply(), prevSupply.get(row.getRegionId())))

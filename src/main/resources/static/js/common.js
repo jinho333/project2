@@ -69,8 +69,8 @@
  *            corrLabels: ['공급량','평균기온',...], corr: [[1,-0.96,...], ...],
  *            corrPeriod: '2021-01 ~ 2026-06' }   (상관계수 계산에 쓴 기간)
  *      GET  /api/national/regions                      사용: national.js (전국 페이지 전용 지역 지표)
- *        → [ { id: 'se', name: '서울', supply, supplyYoy, pop, sensitivity, mape, trend, lo, hi }, ... ]
- *          ※ 여기의 id 는 'se' 같은 코드. ①의 숫자 id 와 다르므로 national.js 가 이름으로 짝을 맞춤
+ *        → [ { id: 1, name: '서울', supply, supplyYoy, pop, sensitivity, mape, trend, lo, hi }, ... ]
+ *          ※ id 는 ①과 같은 지역 번호(DB REGION_ID)
  *
  *   ④ GET  /api/forecast/summary?horizon=6            사용: forecast.js 지도 색칠
  *        → [ { id: 1, total: 478.2 }, ... ]   (지역별 향후 horizon개월 예측 합계)
@@ -325,9 +325,10 @@
   //     showValue : true 면 막대 끝에 값 표시
   //     axisTitle : 가로축 아래 제목
   //     barThickness : 막대 두께(px), 기본 12
+  //     onHoverItem  : 막대에 마우스를 올리거나 벗어날 때 실행할 함수 (올린 막대의 data 항목, 막대 밖이면 null)
   //   data 항목에 detail 글자를 넣으면 툴팁 둘째 줄에 보여줌
   //   예) D.hbar($('accChart'), 목록, { max: 20, ref: 8, refLabel: '기준 8%', showValue: true });
-  function hbar(canvas, data, { max, ref, refLabel, onClick, showValue = false, axisTitle, barThickness = 12 } = {}) {
+  function hbar(canvas, data, { max, ref, refLabel, onClick, showValue = false, axisTitle, barThickness = 12, onHoverItem } = {}) {
     return new Chart(canvas, {
       type: 'bar',
       // 막대 이름 / 값 / 색을 data 배열에서 각각 뽑아냄
@@ -344,10 +345,15 @@
         },
         // 기준선 + 툴팁 내용('7.4%' 형태)
         plugins: { refLine: { value: ref, label: refLabel }, tooltip: { callbacks: { label: i => fmt(i.raw, 1) + '%', afterLabel: i => data[i.dataIndex].detail || '' } } },
+        // 마우스가 막대 한 줄 전체(막대 사이 틈과 막대 오른쪽 빈 곳 포함)에 있으면 그 막대로 인식 → 반응이 빠르고 클릭하기 쉬움
+        interaction: { mode: 'index', axis: 'y', intersect: false },
         // 막대 클릭: els = 클릭된 막대 목록. 있으면 그 막대의 data 항목으로 onClick 실행
         onClick: (_e, els) => { if (els.length && onClick) onClick(data[els[0].index]); },
         // 마우스가 막대 위에 있으면 손가락 모양 커서
-        onHover: (e, els) => { e.native.target.style.cursor = els.length && onClick ? 'pointer' : 'default'; }
+        onHover: (e, els) => {
+          e.native.target.style.cursor = els.length && onClick ? 'pointer' : 'default';
+          if (onHoverItem) onHoverItem(els.length ? data[els[0].index] : null);
+        }
       }
     });
   }
@@ -673,7 +679,7 @@
       const big = r.w > 140 && r.h > 70;                            // 큰 칸이면 이름을 크게
       const note = r.note !== undefined ? r.note : `${fmt((r.value / total) * 100, 1)}%`;
       // left/top/width/height 로 칸의 위치와 크기를 지정. 칸이 충분히 클 때만 이름·값 글자를 넣음
-      return `<div class="tm-cell" data-id="${r.id}" data-i="${i}" aria-label="${r.label} ${fmt(r.value)}${unit}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">
+      return `<div class="tm-cell" data-id="${r.id}" data-i="${i}" aria-label="${r.label} ${fmt(r.value)}${unit}"${onSelect ? ' tabindex="0" role="button"' : ''} style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">
         <div class="tm-inner" style="background:${r.color || seq(t)};color:${r.ink || seqInk(t)};${r.w > 60 && r.h > 36 ? '' : 'padding:2px'}">
           ${r.w > 44 && r.h > 22 ? `<b style="font-size:${big ? 15 : 12}px">${r.label}</b>` : ''}
           ${r.w > 72 && r.h > 44 ? `<span>${r.w > 96 ? `${fmt(r.value)}${unit} · ${note}` : note}</span>` : ''}
@@ -705,7 +711,18 @@
     });
 
     // onSelect 를 넘겨받았으면 칸마다 클릭 이벤트 연결
-    if (onSelect) el.querySelectorAll('.tm-cell').forEach(c => { c.onclick = () => onSelect(c.dataset.id); });
+    if (onSelect) {
+      el.querySelectorAll('.tm-cell').forEach(c => {
+        c.onclick = () => onSelect(c.dataset.id);
+        // 키보드: Tab 으로 칸 사이를 옮기고 Enter 나 Space 로 선택
+        c.onkeydown = e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(c.dataset.id);
+          }
+        };
+      });
+    }
   }
 
 
@@ -751,6 +768,11 @@
           return;
         }
         const v = M[r][c];
+        // 값이 없으면(서버가 계산할 수 없다고 null 을 보냄) 색 없이 '–' 만 표시. 마우스 설명 대상(.hm-cell)이 아님
+        if (v === null || v === undefined) {
+          h += `<div class="hm-na" aria-label="${labels[r]} 와 ${labels[c]}: 계산할 수 없음">–</div>`;
+          return;
+        }
         // 칸 1개: 배경색은 값에 따라, 글자는 소수 2자리
         h += `<div class="hm-cell" data-r="${r}" data-c="${c}" aria-label="${labels[r]} 와 ${labels[c]}: ${v.toFixed(2)}" style="background:${divColor(v)};color:${Math.abs(v) >= 0.83 ? '#fff' : 'var(--ink)'}">${v.toFixed(2)}</div>`;
       });
