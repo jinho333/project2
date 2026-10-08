@@ -103,21 +103,6 @@
   </select>
 
 
-  <!-- =======================================================
-       [API ②] 전체 기간 월별 원본 (분기 집계 + 상관계수 계산용)
-         - 단위는 환산하지 않음 (서비스에서 상관계수 계산 시 단위 불일치가 상관 없고,
-           원본 숫자가 커도 피어슨은 스케일 무관)
-         - 2021-01 ~ 가장 최신월까지 전부 가져옴 (한 지역 ≈ 60여 행)
-       ======================================================= -->
-  <select id="getGasAllMonths" resultType="com.commit.project2.dto.GasDTO">
-    SELECT
-      g.YM         AS ym,
-      g.AVG_TEMP   AS avgTemp,
-      g.POPULATION AS population,
-      g.SUPPLY     AS supply
-    FROM gas_monthly g
-    WHERE g.REGION_ID = #{regionId}
-    ORDER BY g.YM
-  </select>
+  <!-- 참고: "한 지역 전체 월별" 쿼리는 gas-mapper.xml 의 getMonthlyByRegion 으로 이동함 -->
 
 </mapper>
