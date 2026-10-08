@@ -16,7 +16,7 @@ public class NationalRegionDTO {
   private Double supply;      // 기준 연도 공급량(백만㎥)
   private Double supplyYoy;   // 전년 대비 공급량 증감률(%)
   private Double pop;         // 인구(만 명)
-  private Double sensitivity; // 겨울 1°C 하락 시 공급 증가율(%)
+  private Double sensitivity; // 기온 1°C 하락 시 공급 증가율(%), FastAPI 모델 기반 (서버가 꺼져 있으면 null)
   private Double mape;        // 예측 오차 MAPE(%), FastAPI 의 실제 값 (서버가 꺼져 있으면 null)
   private Double trend;       // 인구 증감률(%/년)
   private Double lo;          // 1월 평균기온(°C)
