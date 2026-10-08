@@ -110,6 +110,13 @@
 .donut-center b{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.5px;font-variant-numeric:tabular-nums}
 /* 범례: 한 줄(.dl-row)이 하나의 그리드. 호버한 줄은 배경+굵게, 나머지 줄은 흐리게 (도넛 조각과 같이 반응) */
 .donut-legend{display:flex;flex-direction:column;font-size:13px;min-width:150px;flex:1}
+/* 화면이 넓어 카드가 넓을 때만(1440px 이상) 도넛을 키우고 범례 폭을 제한해 이름과 비율(%) 사이가 멀어지지 않게 함
+   (더 좁은 화면은 기존 크기 그대로: 키우면 범례가 도넛 아래로 밀림) */
+@media (min-width:1440px){
+  .donut{width:204px;height:204px}
+  .donut-center b{font-size:26px}
+  .donut-legend{flex:0 1 160px;min-width:160px}
+}
 .dl-row{display:grid;grid-template-columns:10px 1fr auto;column-gap:10px;align-items:center;padding:1px 8px;margin:0 -8px;border-radius:var(--radius-md);transition:background var(--dur-fast),opacity var(--dur-fast)}
 .dl-row b{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
 .dl-name small{display:block;font-size:12px;font-weight:400;color:var(--mute);line-height:1.3}
