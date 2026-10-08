@@ -89,7 +89,8 @@
                         </div>
                         <div class="card-body">
                             <div class="chart" style="height:440px"><canvas id="sensChart"></canvas></div>
-                            <div class="bar-legend"><i style="background:var(--season-winter)"></i>전국 평균보다 높음<i style="background:var(--seq-2)"></i>전국 평균보다 낮음</div>
+                            <div class="tm-legend" id="sensLegend"></div>
+                            <div id="sensNote" class="mt-12"></div>
                         </div>
                     </section>
                     <section class="card">
@@ -104,6 +105,7 @@
                         </div>
                         <div class="card-body">
                             <div class="chart" style="height:440px"><canvas id="accChart"></canvas></div>
+                            <div class="tm-legend" id="accLegend"></div>
                             <div id="accCallout" class="mt-12"></div>
                         </div>
                     </section>

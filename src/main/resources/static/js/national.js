@@ -340,18 +340,37 @@
     $('trendNotes').innerHTML = trendNotesOf(annual);
   };
 
+  // 값이 큰 순으로 정렬된 지역 목록을 4구간(4분위)으로 나눔 → 지역 id 별 0(낮음)~3(높음). 극단 값 하나에 색이 쏠리지 않게 값이 아닌 순위로 나눔
+  const bandsOf = rows => {
+    const bands = {};
+    rows.forEach((r, i) => { bands[r.id] = 3 - Math.min(3, Math.floor((i * 4) / rows.length)); });
+    return bands;
+  };
+  // 색 범례: 낮음 → 높음 (4구간)
+  const bandLegend = (colors, lowText, highText) =>
+    `${lowText}${colors.map(c => `<i style="background:${c}"></i>`).join('')}${highText}<span class="tm-legend-note">4분위 (순위 기준)</span>`;
+
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
   const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape }) => {
-    // 민감도: 전국 평균보다 높으면 겨울색(파랑)으로 강조
+    // 민감도: 높을수록 진한 파랑 (4구간). 전국 평균은 기준선으로 따로 표시
+    const sensColors = ['--seq-2', '--seq-3', '--seq-4', '--seq-5'].map(v => C(v));
+    const sensBand = bandsOf(bySensitivity);
     D.hbar($('sensChart'),
-      bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? C('--season-winter') : C('--seq-2') })),
-      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)' });
+      bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` })),
+      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
+    $('sensLegend').innerHTML = bandLegend(sensColors, '민감도 낮음', '높음');
+    const lowest = bySensitivity[bySensitivity.length - 1];
+    $('sensNote').innerHTML = D.callout('blue', '해석 시 주의', `겨울철 월별 자료로 추정한 값이라 표본이 적습니다. 가장 낮은 ${lowest.name}(${fmt(lowest.sensitivity, 1)}%)처럼 극단 값은 참고용으로 보세요.`);
 
     // 예측 오차: 기준선을 넘으면 빨강. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
     const mapeAxisMax = Math.max(14, Math.ceil(Math.max(...byMape.map(r => r.mape || 0)) / 10) * 10);
+    // 오차: 클수록 노랑 → 빨강 (4구간). 예측 오차를 못 받아오면 순위를 알 수 없어 한 색으로 둠
+    const mapeColors = [C('--yellow-500'), `color-mix(in srgb, ${C('--yellow-500')}, ${C('--red-500')})`, C('--red-500'), C('--div-pos-3')];
+    const mapeBand = bandsOf(byMape);
     D.hbar($('accChart'),
-      byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: r.mape > MAPE_LIMIT ? C('--red-500') : C('--stone') })),
-      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: 'MAPE (%)' });
+      byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` })),
+      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), showValue: true, axisTitle: 'MAPE (%)', barThickness: 16 });
+    $('accLegend').innerHTML = hasMape ? bandLegend(mapeColors, '오차 작음', '큼') : '';
     $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>${overLimit.length}곳 경고` : '';
     $('badBadge').hidden = !hasMape;
     // 원인은 지역마다 다를 수 있어서 단정하는 문구는 넣지 않고, 어떻게 구한 값인지만 설명. 지역 이름은 데이터에서 뽑음
