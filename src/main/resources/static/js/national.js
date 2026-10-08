@@ -384,9 +384,7 @@
       : y === String(year) ? { color: C('--seq-5'), width: 3, radius: 0 } : { color: C('--seq-3'), width: 1.5, radius: 0 };
     const nameOf = y => `${y}년` + (ytd && y === ytd.year ? `(1~${ytd.month}월)` : '');
 
-    $('trendMonthLegend').innerHTML = years.map(y => `<i style="background:${styleOf(y).color}"></i>${nameOf(y)}`).join('') +
-      '<span class="tm-legend-note">굵은 선 = 기준 연도 · 노랑 = 진행 중</span>';
-    return new Chart($('trendMonthChart'), {
+    const chart = new Chart($('trendMonthChart'), {
       type: 'line',
       data: {
         labels: Array.from({ length: 12 }, (_, i) => `${i + 1}월`),
@@ -405,6 +403,51 @@
         plugins: { tooltip: { itemSort: (a, b) => b.parsed.y - a.parsed.y, callbacks: { label: i => `${i.dataset.label}  ${fmt(i.parsed.y, 1)} 백만㎥` } } }
       }
     });
+
+    // 범례: 연도 칩을 누르면 그 선을 켜고 끔. 빠른 선택 = 올해 vs 작년 / 전체. 항상 한 개는 남김
+    const nowYear = ytd ? ytd.year : String(year), prevYear = String(Number(nowYear) - 1);
+    const pair = years.includes(nowYear) && years.includes(prevYear) ? [prevYear, nowYear] : null;
+    const legend = $('trendMonthLegend');
+    legend.innerHTML =
+      `<div class="trend-chips">${years.map(y => `<button type="button" class="trend-chip" data-y="${y}" aria-pressed="true"><i style="background:${styleOf(y).color}"></i>${nameOf(y)}</button>`).join('')}</div>` +
+      `<div class="trend-quick">${pair ? `<button type="button" class="trend-chip trend-chip--quick" data-quick="pair" aria-pressed="false">${prevYear} vs ${nowYear}</button>` : ''}` +
+      '<button type="button" class="trend-chip trend-chip--quick" data-quick="all" aria-pressed="true">전체</button></div>' +
+      '<div class="trend-hint">연도를 눌러 선을 켜고 끌 수 있습니다 · 굵은 선 = 기준 연도, 노랑 = 진행 중</div>';
+
+    let shown = new Set(years);
+    const sync = () => {
+      years.forEach((y, i) => chart.setDatasetVisibility(i, shown.has(y)));
+      chart.update();   // 보이는 선에 맞춰 세로축 범위도 다시 잡힘
+      legend.querySelectorAll('[data-y]').forEach(btn => btn.setAttribute('aria-pressed', String(shown.has(btn.dataset.y))));
+      legend.querySelector('[data-quick="all"]').setAttribute('aria-pressed', String(shown.size === years.length));
+      const pairBtn = legend.querySelector('[data-quick="pair"]');
+      if (pairBtn) pairBtn.setAttribute('aria-pressed', String(shown.size === 2 && pair.every(y => shown.has(y))));
+    };
+    // 칩에 올리면 그 선만 강조 (지역 연동과 같은 방식: 빠르게 지나갈 때 번쩍이지 않게 짧은 지연)
+    let timer = null;
+    const highlight = y => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        chart.data.datasets.forEach((d, i) => {
+          const base = styleOf(years[i]);
+          d.borderColor = d.backgroundColor = (y === null || years[i] === y) ? base.color : fade(base.color, 0.25);
+          d.borderWidth = years[i] === y ? Math.max(base.width, 3) : base.width;
+        });
+        chart.update();
+      }, y === null ? 80 : 40);
+    };
+    legend.querySelectorAll('[data-y]').forEach(btn => {
+      const y = btn.dataset.y;
+      btn.onclick = () => {
+        if (shown.has(y)) { if (shown.size > 1) shown.delete(y); } else shown.add(y);
+        sync();
+      };
+      btn.onmouseenter = btn.onfocus = () => highlight(y);
+      btn.onmouseleave = btn.onblur = () => highlight(null);
+    });
+    legend.querySelector('[data-quick="all"]').onclick = () => { shown = new Set(years); sync(); };
+    if (pair) legend.querySelector('[data-quick="pair"]').onclick = () => { shown = new Set(pair); sync(); };
+    return chart;
   };
 
   // 월별 보기 오른쪽 설명 박스: 기준 연도의 계절 곡선, 올해 누적, 주의 문구

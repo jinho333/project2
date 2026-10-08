@@ -83,6 +83,17 @@
 .tm-tip{position:absolute;display:none;z-index:5;pointer-events:none;padding:8px 10px;background:var(--surface-dark);color:var(--white);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);font-size:12px;line-height:1.6;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tm-tip b{display:block;font-size:13px;margin-bottom:2px}
 /* 트리맵 색 범례 */
+/* 월별 곡선 범례: 연도 칩을 눌러 선을 켜고 끔 + 빠른 선택 (올해 vs 작년 / 전체) */
+.trend-legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin-top:12px}
+.trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:6px}
+.trend-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:12px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
+.trend-chip i{display:inline-block;width:14px;height:4px;border-radius:2px}
+.trend-chip:hover{background:var(--surface-soft)}
+.trend-chip[data-y][aria-pressed="false"]{opacity:.5}
+.trend-chip[data-y][aria-pressed="false"] i{background:var(--ash)!important}
+.trend-chip--quick[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
+.trend-hint{flex-basis:100%;font-size:12px;color:var(--mute)}
+@media (prefers-reduced-motion:reduce){.trend-chip{transition:none}}
 .tm-legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--mute)}
 .tm-legend i{display:inline-block;width:28px;height:8px;border-radius:2px}
 .tm-legend .tm-legend-note{margin-left:auto}
