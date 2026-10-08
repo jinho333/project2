@@ -258,6 +258,16 @@
         `평균기온 ${fmt(warmestYear.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lowYear.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 일치합니다.`));
     }
     notes.push(D.callout('purple', '연도별 최대·최소', `가장 많은 해 ${peakYear.year}년 ${fmt(peakYear.supply)}백만㎥, 가장 적은 해 ${lowYear.year}년 ${fmt(lowYear.supply)}백만㎥ (${signed(((lowYear.supply - peakYear.supply) / peakYear.supply) * 100)}%)`));
+    // 기온이 거의 같은데(0.1°C 이내) 공급량이 2% 이상 다른 두 해 → 기온만으로는 설명되지 않는 부분
+    let gap = null;
+    annual.forEach((a, i) => annual.slice(i + 1).forEach(b => {
+      const diff = Math.abs(b.supply - a.supply) / Math.min(a.supply, b.supply) * 100;
+      if (Math.abs(a.avgTemp - b.avgTemp) <= 0.1 && diff >= 2 && (!gap || diff > gap.diff)) gap = { a, b, diff };
+    }));
+    if (gap) {
+      const [lo, hi] = gap.a.supply < gap.b.supply ? [gap.a, gap.b] : [gap.b, gap.a];
+      notes.push(D.callout('blue', '기온 외 요인', `${lo.year}년과 ${hi.year}년은 평균기온이 ${fmt(lo.avgTemp, 1)}°C로 비슷하지만 공급량은 ${hi.year}년이 ${fmt(gap.diff, 1)}% 더 많았습니다. 기온 외에 인구·세대 수나 산업용 수요도 영향을 줄 수 있습니다.`));
+    }
     notes.push(D.callout('blue', '해석 시 주의', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
     return notes.join('');
   };
@@ -269,12 +279,14 @@
       $('trendCard').style.display = 'none';
       return;
     }
-    $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 막대 = 연간 공급량(백만㎥) · 선 = 평균기온(°C)`;
+    $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 12개월이 모두 있는 연도만 비교`;
 
     const supplies = annual.map(a => a.supply), temps = annual.map(a => a.avgTemp);
-    // 막대는 위쪽 65% 아래, 기온 선은 그 위쪽에 놓이도록 두 축의 범위를 잡음 (서로 겹쳐 글자가 가려지지 않게)
+    // 막대는 아래쪽 65% 안, 기온 선은 그 위쪽(높이 74~94%)에 놓이도록 두 축의 범위를 잡음 (서로 겹쳐 글자가 가려지지 않게)
+    // 기온 축은 눈금 없이 값을 점마다 표시하므로, 선의 높낮이는 해 사이의 차이를 보기 쉽게 키운 것
     const supplyMax = Math.ceil(Math.max(...supplies) / 0.65 / 2000) * 2000;
-    const tempMin = Math.floor(Math.min(...temps)) - 9, tempMax = Math.ceil(Math.max(...temps)) + 1;
+    const tempLow = Math.min(...temps), tempSpan = Math.max(Math.max(...temps) - tempLow, 0.5) / 0.2;
+    const tempMin = tempLow - tempSpan * 0.74, tempMax = tempMin + tempSpan;
     // 막대 위에 값 표시 (Chart.js 에 값 표시 기능이 없어서 직접 그림)
     const barValues = {
       id: 'barValues',
@@ -283,6 +295,17 @@
         ctx.save();
         ctx.fillStyle = C('--ink'); ctx.font = `600 12px ${C('--font-sans')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
         chart.getDatasetMeta(0).data.forEach((bar, i) => ctx.fillText(fmt(annual[i].supply), bar.x, bar.y - 4));
+        ctx.restore();
+      }
+    };
+    // 기온 선의 점마다 값 표시 (막대 값과 같은 방식)
+    const tempValues = {
+      id: 'tempValues',
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.fillStyle = C('--yellow-700'); ctx.font = `600 12px ${C('--font-sans')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        chart.getDatasetMeta(1).data.forEach((pt, i) => ctx.fillText(`${fmt(annual[i].avgTemp, 1)}°C`, pt.x, pt.y - 8));
         ctx.restore();
       }
     };
@@ -295,22 +318,23 @@
 
     new Chart($('trendChart'), {
       data: {
-        labels: annual.map(a => `${a.year}년`),
+        labels: annual.map(a => [`${a.year}년`, a.supplyYoy === null || a.supplyYoy === undefined ? '' : `전년 ${signed(a.supplyYoy)}%`]),   // 두 줄: 연도 / 전년 대비
         datasets: [
           { type: 'bar', label: '연간 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, maxBarThickness: 56,
             backgroundColor: annual.map(a => a.year === year ? C('--seq-5') : C('--seq-3')) },
-          { type: 'line', label: '평균기온', data: temps, yAxisID: 'y1', borderColor: C('--yellow-600'), backgroundColor: C('--yellow-600'), borderWidth: 2, pointRadius: 4, tension: 0 }
+          { type: 'line', label: '평균기온', data: temps, yAxisID: 'y1', borderColor: C('--yellow-700'), backgroundColor: C('--yellow-700'), borderWidth: 2, pointRadius: 4, tension: 0 }
         ]
       },
-      plugins: [barValues],
+      plugins: [barValues, tempValues],
       options: {
         layout: { padding: { top: 8 } },
+        interaction: { mode: 'index', intersect: false },   // 한 해에 올리면 공급량과 기온을 함께 보여줌
         scales: {
-          x: { grid: { display: false } },
+          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false } },   // 두 줄 라벨이 기울지 않게
           y: { min: 0, max: supplyMax, ticks: { callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
-          y1: { position: 'right', min: tempMin, max: tempMax, grid: { drawOnChartArea: false }, ticks: { callback: v => v + '°' }, title: axisTitle('평균기온 (°C)') }
+          y1: { display: false, min: tempMin, max: tempMax }
         },
-        plugins: { tooltip: { callbacks: { label: tooltipLabel } } }
+        plugins: { tooltip: { callbacks: { title: items => `${annual[items[0].dataIndex].year}년`, label: tooltipLabel } } }
       }
     });
     $('trendNotes').innerHTML = trendNotesOf(annual);
