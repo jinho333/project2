@@ -22,8 +22,20 @@ import java.util.function.ToDoubleFunction;
 
 // 전국 통계 페이지 서비스
 //  - getNationalSummary(): 전국(REGION_ID 18) 월별 데이터로 증감률과 상관계수 계산
-//  - "17개 시·도별 지표" 는 /api/regions (RegionService.getRegionSummaries) 로 통합됨 (2026-10-08)
-//    → NationalApiController 의 /regions 가 regionService 를 그대로 호출
+//  - 17개 시·도별 지표는 이 서비스가 아니라 공용 /api/regions (RegionService.getRegionSummaries) 가 만듦
+//
+// 데이터 흐름: DB(GasMapper) 에서 월별 줄(GasDTO)을 읽음 → 여기서 계산 → DTO 로 담아 JSON 응답 → national.js 가 그림
+// 단위: DB 의 공급량은 천㎥, 인구는 명. 응답으로 내보낼 때는 화면에 맞춰 백만㎥, 만 명으로 바꿈
+//
+// 용어 (처음 보면 헷갈리는 것)
+//  - 전년 대비(YoY): (올해 - 작년) / 작년 × 100. 값이 없으면 0 이 아니라 null (0 은 '변화 없음' 으로 읽히므로)
+//  - 전년 동월 대비 변화: 각 값에서 '작년 같은 달' 값을 뺀 것. 겨울에 많고 여름에 적은 계절 패턴을 없애고 비교하려는 목적
+//  - 상관계수 r: -1 ~ +1. +1 에 가까우면 같이 늘고 줄며, -1 에 가까우면 반대로 움직이고, 0 이면 관계가 안 보임
+//  - 난방도일(HDD): 기준온도(18°C) 보다 추운 정도 × 일수. 추울수록 커서 난방 수요의 지표로 씀
+//  - MAPE: 예측값이 실제값과 평균 몇 % 다른지. FastAPI(파이썬 예측 서버)가 계산해서 보내줌
+//  - 기온 민감도(%/°C): 기온이 1°C 내려갈 때 공급량이 몇 % 늘어나는지. 이것도 FastAPI 값
+//
+// FastAPI 가 꺼져 있어도 나머지 화면은 나와야 하므로, FastAPI 값은 항상 null 일 수 있다고 보고 다룸
 @Service
 @RequiredArgsConstructor
 public class NationalService {
@@ -36,6 +48,7 @@ public class NationalService {
 
   // FastAPI 의 GET /mape 호출 → { items: [{ region, mape }], delta }
   // FastAPI 서버가 꺼져 있어도 전국 페이지의 나머지는 나와야 하므로 실패하면 null 을 돌려줌
+  // (화면을 한 번 열면 여기(/api/national)와 공용 /api/regions(RegionService)에서 각각 호출하므로 FastAPI 를 2번 부름)
   private PyMapeDTO fetchMape() {
     try {
       return restClient.get()
@@ -60,6 +73,8 @@ public class NationalService {
     return item == null ? null : item.getSensitivity();
   }
 
+  // FastAPI 응답(items)에서 지역 이름이 같은 한 줄 찾기 ('전국' 도 items 안에 한 줄로 들어 있음)
+  // py 나 items 가 null 이어도, 목록 안에 null 이 섞여 있어도 오류 없이 null 을 돌려줌
   private PyMapeItemDTO findItem(PyMapeDTO py, String regionName) {
     if (py == null || py.getItems() == null) return null;
     for (PyMapeItemDTO item : py.getItems()) {
@@ -78,11 +93,13 @@ public class NationalService {
     return year != null ? year : String.valueOf(Year.now().getValue() - 1);
   }
 
+  // 연도는 'YYYY' 문자열로 다루므로 숫자로 바꿔 1을 뺀 뒤 다시 문자열로
   private String getPrevYear(String year) {
     return String.valueOf(Integer.parseInt(year) - 1);
   }
 
   // GET /api/national 응답 만들기
+  // monthly 는 usableRows 로 걸러낸 전국 월별 줄(YM 오름차순). 아래 계산은 모두 이 목록을 기준으로 함
   public NationalDTO getNationalSummary() {
     List<GasDTO> monthly = usableRows(gasMapper.getNationalMonthly());
     PyMapeDTO py = fetchMape();
@@ -139,6 +156,8 @@ public class NationalService {
     if (last.getMonthValue() == 12) return null;
     int year = last.getYear(), month = last.getMonthValue();
 
+    // 올해 1~month월 합계(curr)와 작년 1~month월 합계(prev)를 같이 구함 (같은 달끼리 비교해야 공정하므로)
+    // 기온은 합계가 아니라 평균을 쓰려고 합과 개수를 함께 셈
     double currSupply = 0, prevSupply = 0, currTemp = 0, prevTemp = 0;
     int currCount = 0, prevCount = 0;
     for (GasDTO g : monthly) {
@@ -150,7 +169,7 @@ public class NationalService {
         prevSupply += g.getSupply(); prevTemp += g.getAvgTemp(); prevCount++;
       }
     }
-    if (currCount != month || prevCount != month) return null;
+    if (currCount != month || prevCount != month) return null;   // 중간에 빠진 달이 있으면 비교가 틀어지므로 계산하지 않음
 
     return NationalYtdDTO.builder()
         .year(String.valueOf(year))
@@ -168,6 +187,7 @@ public class NationalService {
     return rows.stream().filter(this::isUsable).toList();
   }
 
+  // usableRows 의 조건 한 줄: 줄 자체가 null 이 아니고, 아래 값이 모두 있어야 true
   private boolean isUsable(GasDTO g) {
     return g != null && g.getYm() != null && g.getYm().matches("\\d{4}-\\d{2}")
         && g.getAvgTemp() != null && g.getSupply() != null
@@ -180,12 +200,12 @@ public class NationalService {
     return monthly.get(0).getYm() + " ~ " + monthly.get(monthly.size() - 1).getYm();
   }
 
-  // 전국 전년 대비 공급량 증감률(%)
+  // 전국 전년 대비 공급량 증감률(%): 기준 연도 연간 합계 vs 그 전해 연간 합계
   private Double getSupplyYoy(String year) {
     return calcYoy(gasMapper.getNationalAnnualSupply(year), gasMapper.getNationalAnnualSupply(getPrevYear(year)));
   }
 
-  // 증감률(%), 소수점 첫째 자리 (전년 값이 없거나 0 이하면 0)
+  // 증감률(%), 소수점 첫째 자리
   // 비교할 값이 없거나 0 이하이면 null (0.0 으로 두면 '변화 없음' 으로 잘못 읽힘)
   private Double calcYoy(Double curr, Double prev) {
     if (prev == null || curr == null || prev <= 0) return null;
@@ -195,7 +215,9 @@ public class NationalService {
   // 전국 월별 데이터로 계산한 변수 간 상관계수 행렬
   // 산업생산은 DB에 없어서 제외
   // yoy = true 이면 각 값에서 작년 같은 달 값을 뺀 "전년 동월 대비 변화"로 계산 (계절 패턴과 완만한 추세가 함께 빠짐, 작년 값이 없는 첫 12개월은 제외)
+  // 결과: matrix[i][j] = i번째 변수와 j번째 변수의 r (순서는 NationalDTO.corrLabels 와 같음: 공급량, 평균기온, 난방도일, 인구, 세대수)
   private List<List<Double>> calcCorrMatrix(List<GasDTO> monthly, boolean yoy) {
+    // 변수마다 '월별 값 목록' 하나씩 (목록 길이는 모두 같아야 상관을 구할 수 있음)
     List<double[]> series = List.of(
         toDoubleArray(monthly, GasDTO::getSupply),
         toDoubleArray(monthly, GasDTO::getAvgTemp),
@@ -208,6 +230,7 @@ public class NationalService {
       series = series.stream().map(row -> diffFromPrevYear(row, prev)).toList();
     }
 
+    // 모든 변수 쌍의 상관을 구해 표(행렬)로 만듦. 자기 자신과의 상관(대각선)은 항상 1
     List<List<Double>> matrix = new ArrayList<>();
     for (double[] row : series) {
       List<Double> line = new ArrayList<>();
@@ -253,13 +276,8 @@ public class NationalService {
     return Math.max(0, HDD_BASE_TEMP - gas.getAvgTemp()) * days;
   }
 
+  // 월별 줄 목록에서 getter 가 가리키는 값(공급량, 기온 등)만 뽑아 숫자 배열로 만듦
   private double[] toDoubleArray(List<GasDTO> list, ToDoubleFunction<GasDTO> getter) {
     return list.stream().mapToDouble(getter).toArray();
   }
-
-  /* ---------- 시·도별 지표 ---------- */
-  //  getRegions() 는 /api/national/regions 가 RegionService.getRegionSummaries() 로
-  //  통합되면서(2026-10-08) 삭제됨. NationalApiController 가 regionService 를 직접 호출.
-  //  관련 private 메서드(calcPopulationTrend, getAvgPopulation, getMonthlyAvgTemp)
-  //  와 상수(REGION_NAMES) 도 함께 제거.
 }

@@ -44,11 +44,13 @@
  *
  *   ① GET  /api/regions                              사용: 모든 페이지 (지도, 지역 정보, 검색)
  *        → 17개 시·도 목록 ('전국' 제외)
- *          [ { id: 1, name: '서울', supply: 2399.5, pop: 932.2,
- *              lo: -1.8, hi: 27.3, trend: -0.4, mape: 8.5 }, ... ]
+ *          [ { id: 1, name: '서울', supply: 2399.5, supplyYoy: 6.3, pop: 932.2,
+ *              lo: -1.8, hi: 27.3, trend: -0.4, mape: 8.5, sensitivity: 10.8 }, ... ]
  *          id     = DB 의 REGION_ID (숫자)
  *          supply = 기준 연도의 연간 공급량,  pop = 기준 연도의 평균 인구
  *                   (기준 연도 = 12개월이 모두 있는 가장 최근 연도. 지금은 2025)
+ *          supplyYoy   = 전년 대비 공급량 증감률(%, 전년 데이터가 없으면 null)
+ *          sensitivity = 기온 민감도(%/°C, FastAPI 가 꺼져 있으면 mape 와 함께 null)
  *          lo/hi  = 1월/8월 평균기온 (시뮬레이션 슬라이더의 처음 위치)
  *          trend  = 인구 증감률(%/년),  mape = 예측 오차율(%, FastAPI 가 꺼져 있으면 null)
  *
@@ -68,9 +70,7 @@
  *        → { supplyYoy: 6.3, mapeDelta: 6.6,
  *            corrLabels: ['공급량','평균기온',...], corr: [[1,-0.96,...], ...],
  *            corrPeriod: '2021-01 ~ 2026-06' }   (상관계수 계산에 쓴 기간)
- *      GET  /api/national/regions                      사용: national.js (전국 페이지 전용 지역 지표)
- *        → [ { id: 1, name: '서울', supply, supplyYoy, pop, sensitivity, mape, trend, lo, hi }, ... ]
- *          ※ id 는 ①과 같은 지역 번호(DB REGION_ID)
+ *        ※ 전국 페이지의 시·도별 지표는 따로 API 없이 ① GET /api/regions 를 씀
  *
  *   ④ GET  /api/forecast/summary?horizon=6            사용: forecast.js 지도 색칠
  *        → [ { id: 1, total: 478.2 }, ... ]   (지역별 향후 horizon개월 예측 합계)

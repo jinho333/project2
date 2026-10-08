@@ -74,26 +74,4 @@
     ) t
   </select>
 
-  <!-- 시·도 지표 API(/api/national/regions): 전국 페이지의 트리맵·도넛·막대가 사용 (NationalService) -->
-  <!-- 시도별(18 제외) 연간 공급량 합계(천㎥), 인구 평균(명) -->
-  <select id="getRegionAnnualStats" resultMap="gas">
-    SELECT
-      REGION_ID,
-      IFNULL(SUM(SUPPLY), 0)             AS SUPPLY,
-      IFNULL(ROUND(AVG(POPULATION)), 0)  AS POPULATION
-    FROM gas_monthly
-    WHERE REGION_ID &lt; 18
-      AND YM LIKE CONCAT(#{year}, '%')
-    GROUP BY REGION_ID
-    ORDER BY REGION_ID
-  </select>
-
-  <!-- 시도별 월별 전체 (기온, 공급량, 인구) -->
-  <select id="getRegionMonthly" resultMap="gas">
-    SELECT REGION_ID, YM, AVG_TEMP, SUPPLY, POPULATION, HOUSEHOLD_CNT
-    FROM gas_monthly
-    WHERE REGION_ID &lt; 18
-    ORDER BY REGION_ID, YM
-  </select>
-
 </mapper>
