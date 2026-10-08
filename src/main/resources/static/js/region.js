@@ -232,7 +232,7 @@
     // ---------------------------------------------------------------
     // 4) 기온 구간별 공급량 막대 차트 (12구간)
     // ---------------------------------------------------------------
-    // bins : [{ label: '-10~-5', value: 일평균 공급량, days: 해당 구간 일수 }, ...] 12개
+    // bins : [{ label: '-10~-5', value: 월평균 공급량(백만㎥/월), days: 해당 구간 일수 }, ...] 12개
     //        인덱스 0 = 가장 추운 구간, 11 = 가장 따뜻한 구간
     const bins = stats.tempBins;
 
@@ -248,7 +248,7 @@
       data: {
         labels: bins.map(b => b.label),                          // x축: 기온 구간
         datasets: [{
-          data: bins.map(b => b.value),                          // y축: 일평균 공급량
+          data: bins.map(b => b.value),                          // y축: 월평균 공급량
           backgroundColor: bins.map((_, i) => binColor(i)),      // _ : 안 쓰는 값이라는 표시 (인덱스 i만 필요)
           borderRadius: 3
         }]
@@ -263,7 +263,7 @@
           tooltip: {
             callbacks: {
               title: it => `${bins[it[0].dataIndex].label}°C 구간 · ${bins[it[0].dataIndex].days}일`,
-              label: it => `일평균 ${fmt(it.raw, 1)} 백만㎥`
+              label: it => `월평균 ${fmt(it.raw, 1)} 백만㎥`
             }
           }
         }
@@ -276,10 +276,13 @@
     const warm = [...bins].reverse().find(b => b.days > 0);   // 뒤집어서 앞에서부터 → 가장 따뜻한 구간
     //   [...bins] : 배열 복사. reverse()는 원본을 바꾸기 때문에 복사본을 뒤집음
     //   Math.max(0.01, ...) : 따뜻한 구간 값이 0이면 나누기 오류가 나므로 최소 0.01로 막음
+    // 샘플이 적은 해(2026 처럼 진행 중) 는 구간당 월 수가 적어 평균이 거칠 수 있음 → 안내 추가
+    const monthsCovered = months.filter(d => !d.forecast).length;   // 실적 월 수 (예측 보강 제외)
+    const sampleNote = monthsCovered < 12 ? ` · ${year}년은 ${monthsCovered}개월 실적만 반영되어 구간별 표본이 적습니다.` : '';
     $('tempCallout').innerHTML = D.callout(
       'blue',
       `가장 추운 구간(${cold.label}°C)은 가장 따뜻한 구간(${warm.label}°C) 대비 ${fmt(cold.value / Math.max(0.01, warm.value), 1)}배`,
-      '18°C 이상은 난방 수요가 거의 없는 구간(회색)입니다.'
+      '18°C 이상은 난방 수요가 거의 없는 구간(회색)입니다.' + sampleNote
     );
 
 

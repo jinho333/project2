@@ -208,19 +208,22 @@ public class RegionService {
   /**
    * 선택 연도 월별 데이터를 3°C 간격 12구간으로 집계.
    * 구간 index 결정 → tempBinIndex() 참고.
-   * value = (구간에 떨어진 월들의 총 공급량) ÷ (그 월들의 일수 합)
-   *   = 그 구간에 속한 "하루 평균 공급량"
+   * value = (구간에 떨어진 월들의 총 공급량) ÷ (그 월들의 개수)
+   *   = 그 구간에 속한 "월평균 공급량" (백만㎥/월)
+   * days = 그 구간에 속한 월들의 일수 합 (툴팁 "N일" 표시용 — 구간이 데이터에서 차지하는 "날의 양")
    */
   private List<TempBinDTO> buildTempBins(List<MonthDTO> months, int year) {
-    double[] supplySum = new double[12];   // 구간별 공급량 합 (백만㎥)
-    int[]    daysSum   = new int[12];      // 구간별 날짜 수 합
+    double[] supplySum   = new double[12];   // 구간별 공급량 합 (백만㎥)
+    int[]    monthsCount = new int[12];      // 구간별 월 수 (월평균 공식의 분모)
+    int[]    daysSum     = new int[12];      // 구간별 일수 합 (툴팁 표시용)
 
     for (MonthDTO m : months) {
       int idx = tempBinIndex(m.getTemp());
       // 월 길이는 윤년 반영이 필요 → YearMonth 사용
       int monthLen = YearMonth.of(year, m.getM() + 1).lengthOfMonth();
-      supplySum[idx] += m.getValue();
-      daysSum[idx]   += monthLen;
+      supplySum[idx]   += m.getValue();
+      monthsCount[idx]++;
+      daysSum[idx]     += monthLen;
     }
 
     List<TempBinDTO> result = new ArrayList<>(12);
@@ -228,9 +231,9 @@ public class RegionService {
       TempBinDTO bin = new TempBinDTO();
       bin.setLabel(TEMP_BIN_LABELS[i]);
       bin.setDays(daysSum[i]);
-      // 해당 구간에 들어온 일이 없으면 value=0 (0일 나누기 방지)
-      bin.setValue(daysSum[i] > 0
-          ? StatUtils.round(supplySum[i] / daysSum[i], 2)
+      // 그 구간에 떨어진 월이 없으면 value=0 (0 나누기 방지)
+      bin.setValue(monthsCount[i] > 0
+          ? StatUtils.round(supplySum[i] / monthsCount[i], 1)
           : 0.0);
       result.add(bin);
     }
