@@ -74,7 +74,4 @@ public interface RegionMapper {
   List<MonthDTO> getMonthsByYear(@Param("regionId") Long regionId,
                                  @Param("year") int year);
 
-  /** 특정 지역의 "전체 기간 월별 원본" (ym/avgTemp/population/supply) 반환.
-   *  Service 쪽에서 분기 평균(popQ) 과 피어슨 상관계수(popCorr) 를 계산하는 데 사용. */
-  List<GasDTO> getGasAllMonths(Long regionId);
 }

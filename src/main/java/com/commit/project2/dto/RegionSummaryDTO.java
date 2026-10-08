@@ -24,7 +24,8 @@ import lombok.Data;
  *   ✅ trend          — 같은 getTempRanges 에서 "기준연도 평균인구 / 전년도 평균인구 − 1" (%) 로 계산
  *   ✅ mape           — RegionService 가 FastAPI GET /mape 응답을 지역명으로 매칭해 주입
  *                       (FastAPI 가 꺼져 있으면 try-catch 로 null 유지)
- *   ⚠️ sensitivity    — 필드 자체가 아직 없음. 산출 로직 미정 → 다음 PR 에서 결정
+ *   ✅ sensitivity    — RegionService 가 FastAPI /mape 응답에서 받아 주입
+ *                       (FastAPI 가 꺼져 있으면 mape 와 함께 null 유지)
  */
 @Data
 public class RegionSummaryDTO {
@@ -40,4 +41,6 @@ public class RegionSummaryDTO {
   private Double hi;   //r.hi (8월 평균기온)
   private Double trend; //r.trend (인구 증감률, %/년) → 예측 페이지 '예측 입력' 카드
   private Double mape;  //r.mape (예측 오차율, %) → 지역 이름 옆 MAPE 배지. FastAPI 모델이 계산한 값
+  private Double sensitivity; //r.sensitivity (겨울 1°C 하락 시 공급량 증가율, %)
+                              // → FastAPI /mape 응답에 포함된 값. 서버 꺼져 있으면 null
 }
