@@ -7,7 +7,7 @@
  * 코드 구성: ① 상수  ② 계산·표시 도구  ③ 섹션별 그리기(화면 순서와 같음)  ④ 시작
  *
  * 사용하는 API (응답 모양은 common.js 맨 위 API 목록 참고)
- *   GET /api/national/regions   시·도별 지표 (NationalRegionDTO 목록)
+ *   GET /api/regions            시·도별 지표 (공용 지역 목록, RegionSummaryDTO). D.loadRegions() 가 받아옴
  *   GET /api/national           전국 요약: 기준 연도, 증감률, 연도별 추이, 상관계수 (NationalDTO)
  * ===================================================================== */
 (() => {
@@ -681,10 +681,9 @@
     // 데이터를 받아오는 동안 KPI 자리에 빈 카드를 보여줌 (실패하면 지움)
     $('kpis').innerHTML = '<div class="kpi kpi-skeleton" aria-hidden="true"></div>'.repeat(5);
     $('kpis').setAttribute('aria-busy', 'true');
-    await D.loadRegions().catch(() => {});   // 공용 지역 목록: 상단 검색창과 지역 이동에 쓰임 (실패해도 이 페이지는 그대로 그림)
     let regions, national;
     try {
-      regions = (await axios.get(D.url('api/national/regions'))).data;
+      regions = await D.loadRegions();   // 공용 지역 목록 (GET /api/regions): 이 페이지의 트리맵·도넛·막대와 상단 검색창, 지역 이동이 같이 씀
     } catch (err) {
       $('kpis').innerHTML = '';
       D.showError(err, '지역 목록');

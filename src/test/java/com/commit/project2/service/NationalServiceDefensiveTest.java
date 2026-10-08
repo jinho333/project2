@@ -121,7 +121,4 @@ class NationalServiceDefensiveTest {
     assertEquals(8.2, summary.getMape(), 1e-9);      // 이름이 null 인 항목은 무시하고 "전국"을 찾음
     assertEquals(1.0, summary.getMapeDelta(), 1e-9);
   }
-
-  // getRegions() 는 /api/national/regions 가 RegionService.getRegionSummaries() 로 통합되면서
-  // NationalService 에서 삭제됨 → 관련 테스트도 제거 (region 쪽에서 보장)
 }

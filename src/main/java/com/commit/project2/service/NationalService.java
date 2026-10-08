@@ -22,8 +22,7 @@ import java.util.function.ToDoubleFunction;
 
 // 전국 통계 페이지 서비스
 //  - getNationalSummary(): 전국(REGION_ID 18) 월별 데이터로 증감률과 상관계수 계산
-//  - "17개 시·도별 지표" 는 /api/regions (RegionService.getRegionSummaries) 로 통합됨 (2026-10-08)
-//    → NationalApiController 의 /regions 가 regionService 를 그대로 호출
+//  - 17개 시·도별 지표는 이 서비스가 아니라 공용 /api/regions (RegionService.getRegionSummaries) 가 만듦
 @Service
 @RequiredArgsConstructor
 public class NationalService {
@@ -256,10 +255,4 @@ public class NationalService {
   private double[] toDoubleArray(List<GasDTO> list, ToDoubleFunction<GasDTO> getter) {
     return list.stream().mapToDouble(getter).toArray();
   }
-
-  /* ---------- 시·도별 지표 ---------- */
-  //  getRegions() 는 /api/national/regions 가 RegionService.getRegionSummaries() 로
-  //  통합되면서(2026-10-08) 삭제됨. NationalApiController 가 regionService 를 직접 호출.
-  //  관련 private 메서드(calcPopulationTrend, getAvgPopulation, getMonthlyAvgTemp)
-  //  와 상수(REGION_NAMES) 도 함께 제거.
 }
