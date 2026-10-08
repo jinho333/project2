@@ -2,8 +2,10 @@ package com.commit.project2.service;
 
 import com.commit.project2.dto.GasDTO;
 import com.commit.project2.dto.NationalDTO;
+import com.commit.project2.dto.NationalMonthDTO;
 import com.commit.project2.dto.NationalRegionDTO;
 import com.commit.project2.dto.NationalYearDTO;
+import com.commit.project2.dto.NationalYtdDTO;
 import com.commit.project2.dto.PyMapeDTO;
 import com.commit.project2.dto.PyMapeItemDTO;
 import com.commit.project2.mapper.GasMapper;
@@ -91,6 +93,8 @@ public class NationalService {
         .year(year)
         .supplyYoy(getSupplyYoy(year))
         .annual(getAnnualTrend())
+        .monthly(getMonthlySeries(monthly))
+        .ytd(getYtd(monthly))
         .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
         .corr(calcCorrMatrix(monthly, false))
@@ -113,6 +117,47 @@ public class NationalService {
       prev = row.getSupply();
     }
     return result;
+  }
+
+  // 월별 공급량·평균기온 (월별 곡선 차트용)
+  private List<NationalMonthDTO> getMonthlySeries(List<GasDTO> monthly) {
+    return monthly.stream()
+        .map(g -> NationalMonthDTO.builder()
+            .ym(g.getYm())
+            .supply(StatUtils.round(g.getSupply() / 1000.0, 1))   // 천㎥ -> 백만㎥
+            .avgTemp(g.getAvgTemp())
+            .build())
+        .toList();
+  }
+
+  // 올해 누적: 진행 중인 연도의 1월 ~ 마지막 달 합계를 작년 같은 기간과 비교
+  // 마지막 달이 12월이면(연도가 끝남) 연간 지표를 쓰므로 null, 작년에 같은 달이 모두 없어도 null
+  private NationalYtdDTO getYtd(List<GasDTO> monthly) {
+    if (monthly.isEmpty()) return null;
+    YearMonth last = YearMonth.parse(monthly.get(monthly.size() - 1).getYm());
+    if (last.getMonthValue() == 12) return null;
+    int year = last.getYear(), month = last.getMonthValue();
+
+    double currSupply = 0, prevSupply = 0, currTemp = 0, prevTemp = 0;
+    int currCount = 0, prevCount = 0;
+    for (GasDTO g : monthly) {
+      YearMonth ym = YearMonth.parse(g.getYm());
+      if (ym.getMonthValue() > month) continue;   // 마지막 달까지만 비교
+      if (ym.getYear() == year) {
+        currSupply += g.getSupply(); currTemp += g.getAvgTemp(); currCount++;
+      } else if (ym.getYear() == year - 1) {
+        prevSupply += g.getSupply(); prevTemp += g.getAvgTemp(); prevCount++;
+      }
+    }
+    if (currCount != month || prevCount != month) return null;
+
+    return NationalYtdDTO.builder()
+        .year(String.valueOf(year))
+        .month(month)
+        .supply(StatUtils.round(currSupply / 1000.0, 1))
+        .supplyYoy(calcYoy(currSupply, prevSupply))
+        .tempDiff(StatUtils.round(currTemp / currCount - prevTemp / prevCount, 1))
+        .build();
   }
 
   // 첫 달 ~ 마지막 달 (월별 데이터가 YM 오름차순이라는 전제)

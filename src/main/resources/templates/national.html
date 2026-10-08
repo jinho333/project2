@@ -59,19 +59,30 @@
                     </section>
                 </div>
 
-                <!-- ③ 연도별 추이: 차트 (막대 = 연간 공급량, 선 = 평균기온) + 오른쪽 설명 박스 (#trendNotes) -->
+                <!-- ③ 연도별 추이: 보기 스위치 (#trendTabs) → 연도별 차트 (막대 = 연간 공급량, 선 = 평균기온) / 월별 곡선 + 오른쪽 설명 박스 (#trendNotes) -->
                 <section class="card" id="trendCard">
                     <div class="card-head">
                         <div>
                             <div class="eyebrow">Trend</div>
-                            <h3 class="card-title">연도별 공급량과 평균기온</h3>
+                            <h3 class="card-title" id="trendTitle">연도별 공급량과 평균기온</h3>
                             <div class="card-sub" id="trendSub">12개월이 모두 있는 연도만 비교</div>
+                        </div>
+                        <div class="metric-switch" id="trendSwitch">
+                            <span class="metric-switch-label">보기</span>
+                            <div id="trendTabs" class="tabs tabs--slide"></div>
                         </div>
                     </div>
                     <div class="card-body grid-corr">
                         <div>
+                          <div id="trendYearView">
                             <div class="chart" style="height:300px"><canvas id="trendChart"></canvas></div>
                             <div class="bar-legend"><i style="background:var(--seq-3)"></i>연간 공급량(백만㎥, 진한 막대 = 기준 연도)<i class="legend-dot" style="background:var(--yellow-700)"></i>평균기온(°C, 점마다 값 표시)</div>
+                          </div>
+                          <!-- 월별 보기: 연도마다 선 하나 (같은 달끼리 비교). 처음 누를 때 JS 가 차트를 그림 -->
+                          <div id="trendMonthView" hidden>
+                            <div class="chart" style="height:300px"><canvas id="trendMonthChart"></canvas></div>
+                            <div class="tm-legend" id="trendMonthLegend"></div>
+                          </div>
                         </div>
                         <div class="stack-sm" id="trendNotes"></div>
                     </div>

@@ -114,15 +114,17 @@
 
   /* ---------- ③ 섹션별 그리기 (화면 순서와 같음) ---------- */
 
-  // KPI 4개: 전년 대비, 전분기 대비는 서버가 계산해서 보내줌
+  // KPI 4개(진행 중인 연도가 있으면 올해 누적 포함 5개): 전년 대비, 전분기 대비는 서버가 계산해서 보내줌
   const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape }) => {
+    const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누적)
     $('kpis').innerHTML = [
       D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
+      ytd && D.kpi({ label: `${ytd.year}년 누적 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
       D.kpi({ label: '전국 기온 민감도 (공급량 가중)', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
       // MAPE 는 비율이라 전분기와의 차이는 %p
       D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
       D.kpi({ label: '오차 큰 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
-    ].join('');
+    ].filter(Boolean).join('');
   };
 
   // 지역별 공급 현황 (트리맵): 면적은 항상 기준 연도 공급량, 색만 토글(전년 대비 증감률 / 1인당 공급량)로 바뀜
@@ -348,7 +350,77 @@
         plugins: { tooltip: { callbacks: { title: items => `${annual[items[0].dataIndex].year}년`, label: tooltipLabel } } }
       }
     });
-    $('trendNotes').innerHTML = trendNotesOf(annual);
+    const yearNotes = trendNotesOf(annual), yearSub = $('trendSub').textContent;
+    $('trendNotes').innerHTML = yearNotes;
+
+    // 보기 스위치: 연도별(기본) / 월별. 월별 차트는 처음 열 때 그림 (숨겨진 상태에서는 크기를 알 수 없음)
+    const monthly = national.monthly || [];
+    $('trendSwitch').hidden = !monthly.length;
+    if (!monthly.length) return;
+    let monthChart = null;
+    slideTabs($('trendTabs'), TREND_VIEWS, 'year', view => {
+      const isMonth = view === 'month';
+      $('trendYearView').hidden = isMonth;
+      $('trendMonthView').hidden = !isMonth;
+      $('trendTitle').textContent = isMonth ? '월별 공급량 곡선' : '연도별 공급량과 평균기온';
+      $('trendSub').textContent = isMonth ? `${monthly[0].ym.slice(0, 4)}~${monthly[monthly.length - 1].ym.slice(0, 4)}년 · 같은 달끼리 연도 비교` : yearSub;
+      $('trendNotes').innerHTML = isMonth ? monthlyNotesOf(national, year) : yearNotes;
+      if (isMonth && !monthChart) monthChart = drawMonthChart(monthly, year, national.ytd);
+    });
+  };
+
+  // 월별 곡선: 연도마다 선 하나. 기준 연도는 진한 파랑, 나머지 완결 연도는 연한 파랑, 진행 중인 연도는 노랑으로 강조
+  const TREND_VIEWS = [{ id: 'year', label: '연도별' }, { id: 'month', label: '월별' }];
+  const drawMonthChart = (monthly, year, ytd) => {
+    const byYear = {};
+    monthly.forEach(m => {
+      const [y, mo] = m.ym.split('-');
+      (byYear[y] = byYear[y] || Array(12).fill(null))[Number(mo) - 1] = m.supply;
+    });
+    const years = Object.keys(byYear).sort();
+    const styleOf = y => y === (ytd && ytd.year) ? { color: C('--yellow-700'), width: 3, radius: 3 }
+      : y === String(year) ? { color: C('--seq-5'), width: 3, radius: 0 } : { color: C('--seq-3'), width: 1.5, radius: 0 };
+    const nameOf = y => `${y}년` + (ytd && y === ytd.year ? `(1~${ytd.month}월)` : '');
+
+    $('trendMonthLegend').innerHTML = years.map(y => `<i style="background:${styleOf(y).color}"></i>${nameOf(y)}`).join('') +
+      '<span class="tm-legend-note">굵은 선 = 기준 연도 · 노랑 = 진행 중</span>';
+    return new Chart($('trendMonthChart'), {
+      type: 'line',
+      data: {
+        labels: Array.from({ length: 12 }, (_, i) => `${i + 1}월`),
+        datasets: years.map(y => ({
+          label: nameOf(y), data: byYear[y], borderColor: styleOf(y).color, backgroundColor: styleOf(y).color,
+          borderWidth: styleOf(y).width, pointRadius: styleOf(y).radius, pointHoverRadius: 4, tension: 0.25
+        }))
+      },
+      options: {
+        animation: reduceMotion ? false : undefined,
+        interaction: { mode: 'index', intersect: false },   // 한 달에 올리면 모든 연도 값을 함께 보여줌
+        scales: {
+          x: { grid: { display: false } },
+          y: { min: 0, ticks: { callback: v => fmt(v) }, title: { display: true, text: '공급량 (백만㎥)', color: C('--mute'), font: { size: 12 } } }
+        },
+        plugins: { tooltip: { itemSort: (a, b) => b.parsed.y - a.parsed.y, callbacks: { label: i => `${i.dataset.label}  ${fmt(i.parsed.y, 1)} 백만㎥` } } }
+      }
+    });
+  };
+
+  // 월별 보기 오른쪽 설명 박스: 기준 연도의 계절 곡선, 올해 누적, 주의 문구
+  const monthlyNotesOf = ({ monthly, ytd }, year) => {
+    const notes = [];
+    const base = monthly.filter(m => m.ym.startsWith(`${year}-`));
+    if (base.length === 12) {
+      const peak = base.reduce((a, b) => (b.supply > a.supply ? b : a)), low = base.reduce((a, b) => (b.supply < a.supply ? b : a));
+      notes.push(D.callout('blue', '계절 곡선',
+        `${year}년 공급량은 ${Number(peak.ym.slice(5))}월 ${fmt(peak.supply)}백만㎥로 가장 많고 ${Number(low.ym.slice(5))}월 ${fmt(low.supply)}백만㎥로 가장 적어, 겨울 정점이 여름 최저의 약 ${fmt(peak.supply / low.supply, 1)}배입니다.`));
+    }
+    if (ytd) {
+      notes.push(D.callout('purple', `${ytd.year}년 1~${ytd.month}월 누적`,
+        `${fmt(ytd.supply)}백만㎥로 전년 같은 기간보다 ${signed(ytd.supplyYoy)}%입니다. 같은 기간 평균기온은 ${signed(ytd.tempDiff)}°C 차이입니다.`));
+      notes.push(D.callout('blue', '해석 시 주의',
+        `${ytd.year}년은 ${ytd.month}월까지의 값이라 연간 합계로 비교하지 않고, 같은 달끼리만 비교합니다.`));
+    }
+    return notes.join('');
   };
 
   // 값이 큰 순으로 정렬된 지역 목록을 4구간(4분위)으로 나눔 → 지역 id 별 0(낮음)~3(높음). 극단 값 하나에 색이 쏠리지 않게 값이 아닌 순위로 나눔
@@ -483,7 +555,7 @@
   const drawDataNote = ({ national, year, period, hasMape }) => {
     // 마지막 달이 12월이 아니면 그 해는 진행 중이라 연간 비교에서 뺐다고 알림
     const [endYear, endMonth] = (national.corrPeriod || '').split(' ~ ').pop().split('-').map(Number);
-    const partial = endMonth && endMonth < 12 ? ` (${endYear}년은 ${endMonth}월까지라 연간 비교에서 제외)` : '';
+    const partial = endMonth && endMonth < 12 ? ` (${endYear}년은 ${endMonth}월까지라 연간 비교에서는 제외하고 올해 누적·월별 곡선에만 포함)` : '';
     const mapeNote = hasMape ? '예측 오차(MAPE)는 최근 12개월을 예측 모델로 다시 예측해 구한 값입니다.' : '예측 오차(MAPE)는 예측 서버가 꺼져 있어 불러오지 못했습니다.';
     $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준${partial}, 연도별 추이는 12개월이 모두 있는 연도만 표시 · ${mapeNote}`;
   };
