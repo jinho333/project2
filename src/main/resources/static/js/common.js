@@ -665,7 +665,8 @@
   //     unit     : 값 뒤에 붙일 단위  예) '㎥'
   //     onSelect : 칸을 클릭했을 때 실행할 함수 (클릭한 칸의 id 를 글자로 넘겨줌)
   //   칸 크기에 따라 글자가 달라짐
-  //     큰 칸 = 이름 + '값 · note'   /   좁은 칸 = 이름 + note   /   아주 작은 칸 = 글자 없음(말풍선으로만 확인)
+  //     큰 칸 = 이름 + '값 · note'   /   좁은 칸 = 이름 + note (이름이 들어가는 칸은 note 도 항상 같이 보임)
+  //     아주 작은 칸 = 글자 없음(말풍선으로만 확인). 어떤 칸이 그런지는 부르는 쪽이 칸 안에 .tm-inner b 가 없는 것으로 찾을 수 있음
   function renderTreemap(el, data, { unit = '', onSelect } = {}) {
     const w = el.clientWidth, h = el.clientHeight;                  // 트리맵 영역의 가로·세로(픽셀)
     const sorted = [...data].sort((a, b) => b.value - a.value);     // 값이 큰 순으로 정렬 (복사본을 정렬 → 원본 순서는 그대로)
@@ -680,9 +681,9 @@
       const note = r.note !== undefined ? r.note : `${fmt((r.value / total) * 100, 1)}%`;
       // left/top/width/height 로 칸의 위치와 크기를 지정. 칸이 충분히 클 때만 이름·값 글자를 넣음
       return `<div class="tm-cell" data-id="${r.id}" data-i="${i}" aria-label="${r.label} ${fmt(r.value)}${unit}"${onSelect ? ' tabindex="0" role="button"' : ''} style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">
-        <div class="tm-inner" style="background:${r.color || seq(t)};color:${r.ink || seqInk(t)};${r.w > 60 && r.h > 36 ? '' : 'padding:2px'}">
+        <div class="tm-inner" style="background:${r.color || seq(t)};color:${r.ink || seqInk(t)};${r.w > 72 && r.h > 36 ? '' : 'padding:2px 4px'}">
           ${r.w > 44 && r.h > 22 ? `<b style="font-size:${big ? 15 : 12}px">${r.label}</b>` : ''}
-          ${r.w > 72 && r.h > 44 ? `<span>${r.w > 96 ? `${fmt(r.value)}${unit} · ${note}` : note}</span>` : ''}
+          ${r.w > 44 && r.h > 44 ? `<span>${r.w > 96 ? `${fmt(r.value)}${unit} · ${note}` : note}</span>` : ''}
         </div></div>`;
     }).join('');
 

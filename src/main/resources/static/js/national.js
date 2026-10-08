@@ -192,12 +192,24 @@
       ? `<span>${signed(yoyMin)}%</span>${swatches(YOY_COLORS)}<span>${signed(yoyMax)}%</span><span class="tm-legend-note">전국 평균 ${pctText(national.supplyYoy)} · 진할수록 많이 증가 · 기온 영향 포함</span>`
       : `<span>${fmt(perCapitaMin)}㎥</span>${swatches(SEQ_COLORS)}<span>${fmt(perCapitaMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역을 4등분해 색칠, 진할수록 많음</span>`;
 
+    // 칸이 너무 작아 이름이 안 들어간 지역(제주·세종 등)은 트리맵 아래에 한 줄로 알려줌 (화면 폭이 바뀌면 대상도 바뀜)
+    const listSmallTiles = data => {
+      const noteById = Object.fromEntries(data.map(d => [d.id, d]));
+      const small = [...$('treemap').querySelectorAll('.tm-cell')]
+        .filter(cell => !cell.querySelector('.tm-inner b'))   // 이름 글자가 그려지지 않은 칸
+        .map(cell => noteById[cell.dataset.id])
+        .filter(Boolean)
+        .map(d => `${d.label} ${d.note}`);
+      $('treemapSmall').innerHTML = small.length ? `작은 지역: ${small.join(', ')}` : '';   // 이름(label)은 tileOf 에서 이미 esc() 한 값이라 그대로 넣어도 안전
+    };
+
     const render = animate => {
       const data = regions.map(tileOf);
       D.renderTreemap($('treemap'), data, { unit: '', onSelect: goToRegion });
       if (animate && !reduceMotion) fadeFromPrevious(data);
       else data.forEach(d => { lastPaint[d.id] = d; });
       $('treemapLegend').innerHTML = legendOf();
+      listSmallTiles(data);
     };
 
     // 토글: 색 기준 스위치
