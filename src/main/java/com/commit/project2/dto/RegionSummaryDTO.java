@@ -36,6 +36,8 @@ public class RegionSummaryDTO {
   private Long id;  //r.id
   private String name; //r.name
   private Double supply; //r.supply (연간 공급량, 백만㎥)
+  private Double supplyYoy; //r.supplyYoy (전년 대비 공급량 증감률, %) → 전국 통계 페이지의 트리맵·막대 색상
+                            // 2021 선택 시 prevYear(2020) 데이터 없음 → LEFT JOIN 으로 null
   private Double pop; //r.pop (인구, 만 명)
   private Double lo;   //r.lo (1월 평균기온) → 시뮬레이션 슬라이더 처음 위치
   private Double hi;   //r.hi (8월 평균기온)

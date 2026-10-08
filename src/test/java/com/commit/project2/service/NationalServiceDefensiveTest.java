@@ -2,7 +2,6 @@ package com.commit.project2.service;
 
 import com.commit.project2.dto.GasDTO;
 import com.commit.project2.dto.NationalDTO;
-import com.commit.project2.dto.NationalRegionDTO;
 import com.commit.project2.dto.PyMapeDTO;
 import com.commit.project2.dto.PyMapeItemDTO;
 import com.commit.project2.mapper.GasMapper;
@@ -46,14 +45,6 @@ class NationalServiceDefensiveTest {
     g.setSupply(supply);
     g.setPopulation(1_000_000L);
     g.setHouseholdCnt(400_000L);
-    return g;
-  }
-
-  private GasDTO regionRow(Long regionId, Double supply) {
-    GasDTO g = new GasDTO();
-    g.setRegionId(regionId);
-    g.setSupply(supply);
-    g.setPopulation(900_000L);
     return g;
   }
 
@@ -131,16 +122,6 @@ class NationalServiceDefensiveTest {
     assertEquals(1.0, summary.getMapeDelta(), 1e-9);
   }
 
-  @Test
-  @DisplayName("시·도 지표: 작년 공급량이 null 인 지역·지역 번호가 null 인 줄이 있어도 오류 없이 나머지를 돌려준다")
-  void regions_ignoreRowsWithNulls() {
-    when(gasMapper.getRegionMonthly()).thenReturn(new ArrayList<>());
-    when(gasMapper.getRegionAnnualStats("2022")).thenReturn(List.of(regionRow(1L, null), regionRow(2L, 900.0)));   // 서울의 작년 값이 null
-    when(gasMapper.getRegionAnnualStats("2023")).thenReturn(List.of(regionRow(1L, 1000.0), regionRow(2L, 1000.0), regionRow(null, 500.0)));   // 번호 null 한 줄
-
-    List<NationalRegionDTO> regions = assertDoesNotThrow(() -> service.getRegions());
-
-    assertEquals(2, regions.size());                                  // 번호가 null 인 줄은 제외
-    assertNotNull(regions.get(0).getName());
-  }
+  // getRegions() 는 /api/national/regions 가 RegionService.getRegionSummaries() 로 통합되면서
+  // NationalService 에서 삭제됨 → 관련 테스트도 제거 (region 쪽에서 보장)
 }

@@ -3,7 +3,6 @@ package com.commit.project2.service;
 import com.commit.project2.dto.GasDTO;
 import com.commit.project2.dto.NationalDTO;
 import com.commit.project2.dto.NationalMonthDTO;
-import com.commit.project2.dto.NationalRegionDTO;
 import com.commit.project2.dto.NationalYearDTO;
 import com.commit.project2.dto.NationalYtdDTO;
 import com.commit.project2.dto.PyMapeDTO;
@@ -20,11 +19,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.ToDoubleFunction;
-import java.util.stream.Collectors;
 
 // 전국 통계 페이지 서비스
 //  - getNationalSummary(): 전국(REGION_ID 18) 월별 데이터로 증감률과 상관계수 계산
-//  - getRegions(): 17개 시·도별 지표 계산 (공급량, 인구, 기온 민감도 등. 민감도와 예측 오차는 FastAPI 값)
+//  - "17개 시·도별 지표" 는 /api/regions (RegionService.getRegionSummaries) 로 통합됨 (2026-10-08)
+//    → NationalApiController 의 /regions 가 regionService 를 그대로 호출
 @Service
 @RequiredArgsConstructor
 public class NationalService {
@@ -32,12 +31,6 @@ public class NationalService {
   private final RestClient restClient;   // FastAPI 호출용 (예측 오차 MAPE 를 받아올 때 사용)
 
   private static final double HDD_BASE_TEMP = 18.0;  // 난방도일 기준온도
-
-  // 인덱스 = REGION_ID (0은 비움, 18 전국은 제외)
-  private static final String[] REGION_NAMES = {
-      "", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
-      "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"
-  };
 
   /* ---------- 예측 오차(MAPE): FastAPI 의 실제 값 ---------- */
 
@@ -265,69 +258,8 @@ public class NationalService {
   }
 
   /* ---------- 시·도별 지표 ---------- */
-
-  // GET /api/national/regions 응답: 17개 시도 목록 (공급량, 인구는 기준 연도 DB 집계)
-  public List<NationalRegionDTO> getRegions() {
-    String year = getBaseYear();
-    String prevYear = getPrevYear(year);
-
-    Map<Long, List<GasDTO>> monthlyByRegion = usableRows(gasMapper.getRegionMonthly()).stream()
-        .filter(g -> g.getRegionId() != null)
-        .collect(Collectors.groupingBy(GasDTO::getRegionId));
-
-    // toMap 은 값이 null 이면 오류가 나므로 지역 번호·공급량이 있는 줄만 사용
-    Map<Long, Double> prevSupply = gasMapper.getRegionAnnualStats(prevYear).stream()
-        .filter(g -> g.getRegionId() != null && g.getSupply() != null)
-        .collect(Collectors.toMap(GasDTO::getRegionId, GasDTO::getSupply, (first, second) -> first));
-
-    PyMapeDTO py = fetchMape();   // 지역별 예측 오차 (FastAPI)
-
-    List<NationalRegionDTO> result = new ArrayList<>();
-    for (GasDTO row : gasMapper.getRegionAnnualStats(year)) {
-      if (row.getRegionId() == null || row.getSupply() == null || row.getPopulation() == null) continue;
-      int regionId = row.getRegionId().intValue();
-      if (regionId < 1 || regionId > 17) continue;
-
-      List<GasDTO> monthly = monthlyByRegion.getOrDefault(row.getRegionId(), List.of());
-
-      result.add(NationalRegionDTO.builder()
-          .id(regionId)
-          .name(REGION_NAMES[regionId])
-          .supply(StatUtils.round(row.getSupply() / 1000.0, 1))      // 천㎥ -> 백만㎥
-          .supplyYoy(calcYoy(row.getSupply(), prevSupply.get(row.getRegionId())))
-          .pop(StatUtils.round(row.getPopulation() / 10000.0, 1))    // 명 -> 만 명
-          .sensitivity(findSensitivity(py, REGION_NAMES[regionId]))   // FastAPI 모델 기반 (지역 상세 페이지와 같은 값)
-          .mape(findMape(py, REGION_NAMES[regionId]))   // FastAPI 모델의 실제 오차율(%)
-          .trend(calcPopulationTrend(monthly, year, prevYear))
-          .lo(getMonthlyAvgTemp(monthly, 1))
-          .hi(getMonthlyAvgTemp(monthly, 8))
-          .build());
-    }
-    return result;
-  }
-
-  // 인구 증감률(%/년): 기준 연도 월평균 인구 vs 전년 월평균 인구
-  private double calcPopulationTrend(List<GasDTO> monthly, String year, String prevYear) {
-    double prev = getAvgPopulation(monthly, prevYear);
-    double curr = getAvgPopulation(monthly, year);
-    if (prev == 0) return 0.0;
-    return StatUtils.round((curr - prev) / prev * 100, 1);
-  }
-
-  private double getAvgPopulation(List<GasDTO> monthly, String year) {
-    return monthly.stream()
-        .filter(g -> g.getYm().startsWith(year))
-        .mapToDouble(GasDTO::getPopulation)
-        .average().orElse(0);
-  }
-
-  // 전체 연도 중 특정 월(1~12)의 평균기온
-  private double getMonthlyAvgTemp(List<GasDTO> monthly, int month) {
-    String monthSuffix = String.format("-%02d", month);
-    double avg = monthly.stream()
-        .filter(g -> g.getYm().endsWith(monthSuffix))
-        .mapToDouble(GasDTO::getAvgTemp)
-        .average().orElse(0);
-    return StatUtils.round(avg, 1);
-  }
+  //  getRegions() 는 /api/national/regions 가 RegionService.getRegionSummaries() 로
+  //  통합되면서(2026-10-08) 삭제됨. NationalApiController 가 regionService 를 직접 호출.
+  //  관련 private 메서드(calcPopulationTrend, getAvgPopulation, getMonthlyAvgTemp)
+  //  와 상수(REGION_NAMES) 도 함께 제거.
 }

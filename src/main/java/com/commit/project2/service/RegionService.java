@@ -43,7 +43,7 @@ public class RegionService {
     }
     String prevYear = String.valueOf(Integer.parseInt(year) - 1);   // 전년도 ("2025" → "2024")
 
-    List<RegionSummaryDTO> list = regionMapper.getRegionSummaries(year);
+    List<RegionSummaryDTO> list = regionMapper.getRegionSummaries(year, prevYear);
 
     // 번호가 같은 지역에 1월·8월 평균기온, 인구 증감률을 넣어줌
     List<TempRangeDTO> temps = regionMapper.getTempRanges(year, prevYear);
