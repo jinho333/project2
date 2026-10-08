@@ -36,10 +36,6 @@ public class NationalService {
   private static final Set<String> WINTER_MONTHS = Set.of("12", "01", "02");
 
   // 인덱스 = REGION_ID (0은 비움, 18 전국은 제외)
-  private static final String[] REGION_CODES = {
-      "", "se", "bs", "dg", "ic", "gj", "dj", "us", "sj",
-      "gg", "gw", "cb", "cn", "jb", "jn", "gb", "gn", "jj"
-  };
   private static final String[] REGION_NAMES = {
       "", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
       "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"
@@ -258,7 +254,7 @@ public class NationalService {
       List<GasDTO> monthly = monthlyByRegion.getOrDefault(row.getRegionId(), List.of());
 
       result.add(NationalRegionDTO.builder()
-          .id(REGION_CODES[regionId])
+          .id(regionId)
           .name(REGION_NAMES[regionId])
           .supply(StatUtils.round(row.getSupply() / 1000.0, 1))      // 천㎥ -> 백만㎥
           .supplyYoy(calcYoy(row.getSupply(), prevSupply.get(row.getRegionId())))

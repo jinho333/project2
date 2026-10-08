@@ -27,13 +27,13 @@
 
   // 도넛 권역: 정부 5+2 광역경제권 (5대 = 수도권·충청권·호남권·대경권·동남권, 2대 특별경제권 = 강원권·제주권)
   const GROUPS = [
-    { label: '수도권', ids: ['se', 'gg', 'ic'] },
-    { label: '동남권', ids: ['bs', 'us', 'gn'] },
-    { label: '충청권', ids: ['dj', 'sj', 'cb', 'cn'] },
-    { label: '대경권', ids: ['dg', 'gb'] },
-    { label: '호남권', ids: ['gj', 'jb', 'jn'] },
-    { label: '강원권', ids: ['gw'] },
-    { label: '제주권', ids: ['jj'] }
+    { label: '수도권', ids: [1, 9, 4] },   // 서울·경기·인천 (지역 번호는 DB REGION_ID)
+    { label: '동남권', ids: [2, 7, 16] },
+    { label: '충청권', ids: [6, 8, 11, 12] },
+    { label: '대경권', ids: [3, 15] },
+    { label: '호남권', ids: [5, 13, 14] },
+    { label: '강원권', ids: [10] },
+    { label: '제주권', ids: [17] }
   ];
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;   // 켜져 있으면 애니메이션 없이 바로 바뀜
@@ -87,13 +87,8 @@
 
   // 지역 클릭 → 지역 상세 페이지 (/region?region=id)
   // 상세 페이지는 공용 지역 목록(D.getRegions)의 id 로 지역을 찾으므로,
-  // 전국 API 의 코드(se)가 아니라 공용 목록의 id(코드든 숫자든)를 이름으로 찾아서 씀
-  let nationalRegions = [];
-  const goToRegion = id => {
-    const name = (nationalRegions.find(r => r.id === id) || {}).name;
-    const shared = D.getRegions().find(r => r.name === name);
-    location.href = D.url(`region?region=${shared ? shared.id : id}`);
-  };
+  // 지역 상세 페이지로 이동 (전국 API 의 id 는 공용 /api/regions 와 같은 지역 번호)
+  const goToRegion = id => { location.href = D.url(`region?region=${id}`); };
 
   // 여러 섹션이 같이 쓰는 값을 한 번만 계산
   const summarize = (regions, national) => {
@@ -580,7 +575,6 @@
     let regions, national;
     try {
       regions = (await axios.get(D.url('api/national/regions'))).data;
-      nationalRegions = regions;
     } catch (err) {
       D.showError(err, '지역 목록');
       return;

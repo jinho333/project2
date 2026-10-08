@@ -69,8 +69,8 @@
  *            corrLabels: ['공급량','평균기온',...], corr: [[1,-0.96,...], ...],
  *            corrPeriod: '2021-01 ~ 2026-06' }   (상관계수 계산에 쓴 기간)
  *      GET  /api/national/regions                      사용: national.js (전국 페이지 전용 지역 지표)
- *        → [ { id: 'se', name: '서울', supply, supplyYoy, pop, sensitivity, mape, trend, lo, hi }, ... ]
- *          ※ 여기의 id 는 'se' 같은 코드. ①의 숫자 id 와 다르므로 national.js 가 이름으로 짝을 맞춤
+ *        → [ { id: 1, name: '서울', supply, supplyYoy, pop, sensitivity, mape, trend, lo, hi }, ... ]
+ *          ※ id 는 ①과 같은 지역 번호(DB REGION_ID)
  *
  *   ④ GET  /api/forecast/summary?horizon=6            사용: forecast.js 지도 색칠
  *        → [ { id: 1, total: 478.2 }, ... ]   (지역별 향후 horizon개월 예측 합계)
