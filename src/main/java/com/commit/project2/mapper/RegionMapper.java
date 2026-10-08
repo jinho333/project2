@@ -46,11 +46,13 @@ public interface RegionMapper {
    * [API ①] GET /api/regions
    * ============================================================ */
 
-  /** 기준 연도(year)의 "지역 목록 + 연간 공급량 + 평균 인구".
-   *  @param year 기준 연도 (예: "2025"). RegionService 가 getLatestFullYear() 로 구해서 넘김
+  /** 기준 연도(year)의 "지역 목록 + 연간 공급량 + 전년대비 증감률 + 평균 인구".
+   *  @param year     기준 연도 (예: "2025"). RegionService 가 getLatestFullYear() 로 구해서 넘김
+   *  @param prevYear 전년도 (예: "2024"). supplyYoy 계산용. 2021 선택 시 2020 데이터 없음 → null
    *  응답은 List<RegionSummaryDTO> 로 바로 매핑됨.
-   *  SQL 쪽에서 단위 환산을 끝내므로 Service 는 그대로 전달만 함. */
-  List<RegionSummaryDTO> getRegionSummaries(@Param("year") String year);
+   *  SQL 쪽에서 단위 환산·증감률 계산을 끝내므로 Service 는 그대로 전달만 함. */
+  List<RegionSummaryDTO> getRegionSummaries(@Param("year") String year,
+                                             @Param("prevYear") String prevYear);
 
 
   /* ============================================================

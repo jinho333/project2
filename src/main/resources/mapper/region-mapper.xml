@@ -59,25 +59,39 @@
 
   <!-- =======================================================
        [API ①] GET /api/regions
-         응답: RegionSummaryDTO { id, name, supply, pop }
-         - 기준 연도(#{year})는 RegionService 가 넘겨줌 = 12개월이 모두 있는 가장 최근 연도 (지금 데이터로는 2025)
-           → 예전에는 '2025%' 로 고정이었음. 2026년 데이터가 12월까지 채워지면 자동으로 2026 기준이 됨
-         - supply : 기준 연도 공급량 합계. DB(천㎥) ÷ 1000 → 백만㎥
-         - pop    : 기준 연도 평균 인구. DB(명) ÷ 10000 → 만 명
+         응답: RegionSummaryDTO { id, name, supply, supplyYoy, pop }
+         - 기준 연도(#{year}) + 전년도(#{prevYear})는 RegionService 가 넘겨줌
+           → 2026년이 12월까지 채워지면 자동으로 2026 기준이 됨
+         - supply    : 기준 연도 공급량 합계. DB(천㎥) ÷ 1000 → 백만㎥
+         - supplyYoy : 전년 대비 공급량 증감률(%). 작년 데이터 없으면(2021 등) null
+                       공식: (올해 공급 ÷ 작년 공급 - 1) × 100
+         - pop       : 기준 연도 평균 인구. DB(명) ÷ 10000 → 만 명
          - "전국"(REGION_ID 18)은 지도 타일맵에 없는 "집계 행" 이라 제외
        ======================================================= -->
   <select id="getRegionSummaries" resultType="com.commit.project2.dto.RegionSummaryDTO">
     SELECT
-      r.REGION_ID                        AS id,
-      r.REGION_NAME                      AS name,
-      ROUND(SUM(g.SUPPLY) / 1000, 1)     AS supply,
-      ROUND(AVG(g.POPULATION) / 10000, 1) AS pop
+      r.REGION_ID                                                        AS id,
+      r.REGION_NAME                                                      AS name,
+      ROUND(curr_agg.sup / 1000, 1)                                      AS supply,
+      ROUND((curr_agg.sup / NULLIF(prev_agg.sup, 0) - 1) * 100, 1)       AS supplyYoy,
+      ROUND(curr_agg.pop_avg / 10000, 1)                                 AS pop
     FROM region r
-    INNER JOIN gas_monthly g
-      ON g.REGION_ID = r.REGION_ID
-      AND g.YM LIKE CONCAT(#{year}, '%')
+    INNER JOIN (
+      SELECT REGION_ID,
+             SUM(SUPPLY)     AS sup,
+             AVG(POPULATION) AS pop_avg
+      FROM gas_monthly
+      WHERE YM LIKE CONCAT(#{year}, '%')
+      GROUP BY REGION_ID
+    ) curr_agg ON curr_agg.REGION_ID = r.REGION_ID
+    LEFT JOIN (
+      SELECT REGION_ID,
+             SUM(SUPPLY) AS sup
+      FROM gas_monthly
+      WHERE YM LIKE CONCAT(#{prevYear}, '%')
+      GROUP BY REGION_ID
+    ) prev_agg ON prev_agg.REGION_ID = r.REGION_ID
     WHERE r.REGION_NAME != '전국'
-    GROUP BY r.REGION_ID, r.REGION_NAME
     ORDER BY r.REGION_ID
   </select>
 
