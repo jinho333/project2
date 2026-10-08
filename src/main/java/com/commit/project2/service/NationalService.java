@@ -25,6 +25,7 @@ import java.util.function.ToDoubleFunction;
 //  - 17개 시·도별 지표는 이 서비스가 아니라 공용 /api/regions (RegionService.getRegionSummaries) 가 만듦
 //
 // 데이터 흐름: DB(GasMapper) 에서 월별 줄(GasDTO)을 읽음 → 여기서 계산 → DTO 로 담아 JSON 응답 → national.js 가 그림
+// 공급량: 한국도시가스협회 통계월보의 '가정용'(취사·난방) 공급량이며 산업용 등은 포함하지 않음 (월보 전국 합계와 값이 일치함을 확인)
 // 단위: DB 의 공급량은 천㎥, 인구는 명. 응답으로 내보낼 때는 화면에 맞춰 백만㎥, 만 명으로 바꿈
 //
 // 용어 (처음 보면 헷갈리는 것)
