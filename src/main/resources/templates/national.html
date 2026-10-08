@@ -111,7 +111,7 @@
                     </section>
                 </div>
 
-                <!-- ⑤ 공급량과 함께 움직이는 요인: 공급량과의 상관 막대 (#corrBars) + 전체 상관표(접힘, #heatmap) + 오른쪽 설명 박스 (#corrNotes) -->
+                <!-- ⑤ 공급량과 함께 움직이는 요인: 보기 전환 탭 (#corrTabs): 공급량과의 상관 막대 (#corrBars) / 전체 상관표 (#corrTable, 기준 탭 #corrBasisTabs, #heatmap) + 오른쪽 설명 박스 (#corrNotes) -->
                 <section class="card">
                     <div class="card-head">
                         <div>
@@ -119,14 +119,18 @@
                             <h3 class="card-title">공급량과 함께 움직이는 요인</h3>
                             <div class="card-sub" id="corrSub">전국 월별 데이터 · 공급량과의 상관계수(r)</div>
                         </div>
+                        <div class="metric-switch">
+                            <span class="metric-switch-label">보기</span>
+                            <div id="corrTabs" class="tabs"></div>
+                        </div>
                     </div>
                     <div class="card-body grid-corr">
                         <div>
                             <div id="corrBars"></div>
-                            <details class="corr-more">
-                                <summary>전체 상관표 보기 (원본)</summary>
-                                <div id="heatmap"></div>
-                            </details>
+                            <div id="corrTable" hidden>
+                                <div id="corrBasisTabs" class="tabs"></div>
+                                <div id="heatmap" class="mt-12"></div>
+                            </div>
                         </div>
                         <div class="stack-sm" id="corrNotes"></div>
                     </div>

@@ -444,12 +444,24 @@
     return notes.join('');
   };
 
-  // 상관계수: 공급량과의 막대 + 접어 둔 전체 상관표(히트맵). lower = 대각선과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
+  // 상관계수: [요인 비교] 공급량과의 막대 / [상관표] 전체 상관표(히트맵, 기준은 원본 또는 전년 동월 대비)
+  //   히트맵 lower = 대각선과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
+  const CORR_VIEWS = [{ id: 'factors', label: '요인 비교' }, { id: 'table', label: '상관표' }];
+  const CORR_BASES = [{ id: 'raw', label: '원본(계절 포함)' }, { id: 'yoy', label: '전년 동월 대비' }];
   const drawCorrelation = ({ national, period }) => {
+    let view = 'factors', basis = 'raw';
+    const render = () => {
+      const matrix = basis === 'yoy' && national.corrYoy ? national.corrYoy : national.corr;
+      $('corrBars').hidden = view !== 'factors';
+      $('corrTable').hidden = view !== 'table';
+      D.renderTabs($('corrTabs'), CORR_VIEWS, view, v => { view = v; render(); });
+      D.renderTabs($('corrBasisTabs'), national.corrYoy ? CORR_BASES : CORR_BASES.slice(0, 1), basis, b => { basis = b; render(); });
+      D.renderHeatmap($('heatmap'), national.corrLabels, matrix, { lower: true });
+    };
     drawCorrBars(national);
-    D.renderHeatmap($('heatmap'), national.corrLabels, national.corr, { lower: true });
     $('corrSub').textContent = `전국 월별 데이터${period ? '(' + period + ')' : ''} · 공급량과의 상관계수(r)`;
     $('corrNotes').innerHTML = corrNotesOf(national);
+    render();
   };
 
   // 페이지 맨 아래 데이터 안내: 기간, 기준 연도, 예측 오차 기준
