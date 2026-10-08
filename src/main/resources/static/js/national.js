@@ -78,6 +78,12 @@
   const toKoreanPeriod = period => (period || '').split(' ~ ')
     .map(ym => ym.replace(/^(\d{4})-(\d{2})$/, (_, y, m) => `${y}년 ${+m}월`)).join(' ~ ');
 
+  // 두 '#rrggbb' 색의 가운데 색 (막대 색이 부드럽게 바뀌려면 Chart.js 가 읽을 수 있는 색이어야 해서 color-mix 대신 직접 계산)
+  const mixHex = (a, b) => {
+    const [x, y] = [a, b].map(c => parseInt(c.slice(1), 16));
+    const mid = shift => Math.round((((x >> shift) & 255) + ((y >> shift) & 255)) / 2);
+    return '#' + [16, 8, 0].map(sh => mid(sh).toString(16).padStart(2, '0')).join('');
+  };
   // 색 → 투명도 0.3 (호버하지 않은 도넛 조각, 연동되지 않은 막대를 흐리게). '#rrggbb' 외의 색(color-mix 등)도 처리
   const fade = color => {
     const m = /^#([0-9a-f]{6})$/i.exec(color);
@@ -433,16 +439,21 @@
   //   bars = [{ chart, items }]  items = 그 차트의 막대 목록 [{ id, color }]
   const linkRegions = bars => {
     const treemap = $('treemap');
-    let active = null;
-    const setActive = id => {
+    let active = null, timer = null;
+    const apply = id => {
       if (id === active) return;
       active = id;
       treemap.classList.toggle('has-link', id !== null);
       treemap.querySelectorAll('.tm-cell').forEach(c => c.classList.toggle('is-linked', id !== null && Number(c.dataset.id) === id));
       bars.forEach(({ chart, items }) => {
         chart.data.datasets[0].backgroundColor = items.map(d => (id === null || d.id === id) ? d.color : fade(d.color));
-        chart.update('none');
+        chart.update();   // 색이 0.3초 동안 부드럽게 바뀜 (모션 줄이기가 켜져 있으면 바로 바뀜)
       });
+    };
+    // 지역 사이를 빠르게 지나갈 때 번쩍이지 않게, 잠깐 머물렀을 때만 바꿈 (막대 사이 틈에서 생기는 '해제'도 바로 반영하지 않음)
+    const setActive = id => {
+      clearTimeout(timer);
+      timer = setTimeout(() => apply(id), id === null ? 140 : 90);
     };
     // 트리맵은 색 기준을 바꾸면 칸이 새로 그려지므로 칸마다 붙이지 않고 바깥 상자에서 한 번만 받음
     treemap.onmouseover = e => { const cell = e.target.closest('.tm-cell'); if (cell) setActive(Number(cell.dataset.id)); };
@@ -470,7 +481,7 @@
     // 예측 오차: 기준선을 넘으면 빨강. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
     const mapeAxisMax = Math.max(14, Math.ceil(Math.max(...byMape.map(r => r.mape || 0)) / 10) * 10);
     // 오차: 클수록 노랑 → 빨강 (4구간). 예측 오차를 못 받아오면 순위를 알 수 없어 한 색으로 둠
-    const mapeColors = [C('--yellow-500'), `color-mix(in srgb, ${C('--yellow-500')}, ${C('--red-500')})`, C('--red-500'), C('--div-pos-3')];
+    const mapeColors = [C('--yellow-500'), mixHex(C('--yellow-500'), C('--red-500')), C('--red-500'), C('--div-pos-3')];
     const mapeBand = bandsOf(byMape);
     const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
     const accChart = D.hbar($('accChart'), accItems,
