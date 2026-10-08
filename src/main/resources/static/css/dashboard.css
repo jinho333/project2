@@ -69,8 +69,8 @@
 @keyframes kpi-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.kpi-skeleton{animation:none}}
 /* 다른 차트의 같은 지역에 올렸을 때(지역 연동): 나머지 칸을 흐리게 */
-.tm-cell{transition:opacity var(--dur-base)}
-.treemap.has-link .tm-cell:not(.is-linked){opacity:.4}
+.tm-cell{transition:opacity var(--dur-fast)}
+.treemap.has-link .tm-cell:not(.is-linked){opacity:.6}
 @media (prefers-reduced-motion:reduce){.tm-cell{transition:none}}
 /* 스위치형 탭(.tabs--slide): 선택된 탭의 흰 배경(.tab-slider)이 national.js 의 slideTabs 에서 버튼 사이를 이동 (공용 .tab 모양은 그대로) */
 .tabs--slide{position:relative}

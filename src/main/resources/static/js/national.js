@@ -84,12 +84,12 @@
     const mid = shift => Math.round((((x >> shift) & 255) + ((y >> shift) & 255)) / 2);
     return '#' + [16, 8, 0].map(sh => mid(sh).toString(16).padStart(2, '0')).join('');
   };
-  // 색 → 투명도 0.3 (호버하지 않은 도넛 조각, 연동되지 않은 막대를 흐리게). '#rrggbb' 외의 색(color-mix 등)도 처리
-  const fade = color => {
+  // 색 → 투명도 alpha (호버하지 않은 도넛 조각은 0.3, 지역 연동으로 흐려지는 막대는 더 연하게 0.55). '#rrggbb' 외의 색(color-mix 등)도 처리
+  const fade = (color, alpha = 0.3) => {
     const m = /^#([0-9a-f]{6})$/i.exec(color);
-    if (!m) return `color-mix(in srgb, ${color} 30%, transparent)`;
+    if (!m) return `color-mix(in srgb, ${color} ${alpha * 100}%, transparent)`;
     const n = parseInt(m[1], 16);
-    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},0.3)`;
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`;
   };
 
   // 지역 클릭 → 지역 상세 페이지 (/region?region=id)
@@ -437,23 +437,25 @@
 
   // 지역 연동: 트리맵 칸이나 막대에 올리면 같은 지역이 모든 차트에서 함께 강조되고 나머지는 흐려짐 (id = 지역 번호, 벗어나면 null)
   //   bars = [{ chart, items }]  items = 그 차트의 막대 목록 [{ id, color }]
+  const LINK_FADE = 0.55;   // 연동되지 않은 막대의 투명도 (클수록 덜 흐림)
   const linkRegions = bars => {
     const treemap = $('treemap');
     let active = null, timer = null;
+    bars.forEach(({ chart }) => { if (!reduceMotion) chart.options.animation = { duration: 150 }; });   // 연동 때 색 전환을 빠르게
     const apply = id => {
       if (id === active) return;
       active = id;
       treemap.classList.toggle('has-link', id !== null);
       treemap.querySelectorAll('.tm-cell').forEach(c => c.classList.toggle('is-linked', id !== null && Number(c.dataset.id) === id));
       bars.forEach(({ chart, items }) => {
-        chart.data.datasets[0].backgroundColor = items.map(d => (id === null || d.id === id) ? d.color : fade(d.color));
-        chart.update();   // 색이 0.3초 동안 부드럽게 바뀜 (모션 줄이기가 켜져 있으면 바로 바뀜)
+        chart.data.datasets[0].backgroundColor = items.map(d => (id === null || d.id === id) ? d.color : fade(d.color, LINK_FADE));
+        chart.update();   // 색이 짧게(0.15초) 부드럽게 바뀜 (모션 줄이기가 켜져 있으면 바로 바뀜)
       });
     };
     // 지역 사이를 빠르게 지나갈 때 번쩍이지 않게, 잠깐 머물렀을 때만 바꿈 (막대 사이 틈에서 생기는 '해제'도 바로 반영하지 않음)
     const setActive = id => {
       clearTimeout(timer);
-      timer = setTimeout(() => apply(id), id === null ? 140 : 90);
+      timer = setTimeout(() => apply(id), id === null ? 80 : 40);
     };
     // 트리맵은 색 기준을 바꾸면 칸이 새로 그려지므로 칸마다 붙이지 않고 바깥 상자에서 한 번만 받음
     treemap.onmouseover = e => { const cell = e.target.closest('.tm-cell'); if (cell) setActive(Number(cell.dataset.id)); };
