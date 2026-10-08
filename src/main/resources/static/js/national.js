@@ -42,7 +42,9 @@
   /* ---------- ② 계산·표시 도구 ---------- */
 
   const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v), 1);   // +6.3 / −2.1
-  const corrText = v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2);             // 상관계수 (범례와 같은 마이너스 기호)
+  const corrText = v => (v === null || v === undefined || Number.isNaN(v)) ? '–' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(2);   // 상관계수 (범례와 같은 마이너스 기호, 값이 없으면 '–')
+  const pctText = v => Number.isFinite(v) ? `${signed(v)}%` : '–';   // 증감률 문구 (값이 없으면 '–')
+  const esc = text => String(text).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));   // HTML 에 끼워 넣는 서버 글자의 특수문자를 무력화
   const percapOf = r => (r.supply * 1e6) / (r.pop * 1e4);                         // 백만㎥ / 만 명 → ㎥/인
   const sortedDesc = (rows, key) => [...rows].sort((a, b) => b[key] - a[key]);   // 원본은 그대로 두고 큰 순 정렬
 
@@ -131,8 +133,8 @@
 
   // 지역별 공급 현황 (트리맵): 면적은 항상 기준 연도 공급량, 색만 토글(전년 대비 증감률 / 1인당 공급량)로 바뀜
   const drawTreemap = ({ regions, national, year, total }) => {
-    const yoys = regions.map(r => r.supplyYoy);
-    const yoyMin = Math.min(...yoys), yoyMax = Math.max(...yoys);
+    const yoys = regions.map(r => r.supplyYoy).filter(Number.isFinite);   // 증감률이 없는(null) 지역은 색 범위 계산에서 제외
+    const yoyMin = yoys.length ? Math.min(...yoys) : 0, yoyMax = yoys.length ? Math.max(...yoys) : 0;
     const perCapitaSorted = regions.map(percapOf).sort((a, b) => a - b);
     const perCapitaMin = perCapitaSorted[0], perCapitaMax = perCapitaSorted[perCapitaSorted.length - 1];
     // 제주·세종이 유난히 낮아서 최소~최대를 균등 분할하면 나머지가 두 색으로만 갈림 → 지역 수 기준 4분위로 나눔
@@ -144,11 +146,11 @@
     // 칸 하나의 색·글자색·문구 (면적 값은 공통)
     const tileOf = r => {
       const perCapita = percapOf(r);
-      const head = `<b>${r.name}</b>공급량 ${fmt(r.supply, 1)} 백만㎥ (${fmt((r.supply / total) * 100, 1)}%)<br>`;
-      const yoyText = `${signed(r.supplyYoy)}%`, perCapitaText = `${fmt(perCapita)}㎥/인·년`;
-      const base = { id: r.id, label: r.name, value: r.supply };
+      const head = `<b>${esc(r.name)}</b>공급량 ${fmt(r.supply, 1)} 백만㎥ (${fmt((r.supply / total) * 100, 1)}%)<br>`;
+      const yoyText = pctText(r.supplyYoy), perCapitaText = `${fmt(perCapita)}㎥/인·년`;
+      const base = { id: r.id, label: esc(r.name), value: r.supply };
       if (metric === 'yoy') {
-        const step = Math.min(YOY_COLORS.length - 1, Math.floor(((r.supplyYoy - yoyMin) / (yoyMax - yoyMin || 1)) * YOY_COLORS.length));
+        const step = Number.isFinite(r.supplyYoy) ? Math.min(YOY_COLORS.length - 1, Math.floor(((r.supplyYoy - yoyMin) / (yoyMax - yoyMin || 1)) * YOY_COLORS.length)) : 0;
         return { ...base, color: YOY_COLORS[step], ink: inkOf(step, YOY_COLORS.length), note: yoyText, tip: `${head}전년 대비 ${yoyText}<br>1인당 ${perCapitaText}` };
       }
       const step = perCapitaCuts.filter(c => perCapita >= c).length;
@@ -172,7 +174,7 @@
 
     // 색 범례: 어떤 색이 큰 값인지 알려줌
     const legendOf = () => metric === 'yoy'
-      ? `<span>${signed(yoyMin)}%</span>${swatches(YOY_COLORS)}<span>${signed(yoyMax)}%</span><span class="tm-legend-note">전국 평균 ${signed(national.supplyYoy)}% · 진할수록 많이 증가 · 기온 영향 포함</span>`
+      ? `<span>${signed(yoyMin)}%</span>${swatches(YOY_COLORS)}<span>${signed(yoyMax)}%</span><span class="tm-legend-note">전국 평균 ${pctText(national.supplyYoy)} · 진할수록 많이 증가 · 기온 영향 포함</span>`
       : `<span>${fmt(perCapitaMin)}㎥</span>${swatches(SEQ_COLORS)}<span>${fmt(perCapitaMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역을 4등분해 색칠, 진할수록 많음</span>`;
 
     const render = animate => {
@@ -219,7 +221,7 @@
     // 범례: 한 줄(.dl-row)이 하나의 요소여야 줄 단위로 호버·강조할 수 있음
     const legend = $('donutLegend');
     legend.innerHTML = slices.map((d, i) =>
-      `<div class="dl-row" data-i="${i}"><i class="sw" style="background:${d.color}"></i><span class="dl-name">${d.label}<small>${d.members}</small></span><b>${pctOf(d)}%</b></div>`).join('');
+      `<div class="dl-row" data-i="${i}"><i class="sw" style="background:${d.color}"></i><span class="dl-name">${esc(d.label)}<small>${esc(d.members)}</small></span><b>${pctOf(d)}%</b></div>`).join('');
     const rows = [...legend.querySelectorAll('.dl-row')];
 
     // 가운데 글자: 평소에는 전국 합계(백만㎥ → 억㎥), 호버하면 해당 조각의 비중과 공급량
@@ -461,7 +463,7 @@
     }
     if (ytd) {
       notes.push(D.callout('purple', `${ytd.year}년 1~${ytd.month}월 누적`,
-        `${fmt(ytd.supply)}백만㎥로 전년 같은 기간보다 ${signed(ytd.supplyYoy)}%입니다. 같은 기간 평균기온은 ${signed(ytd.tempDiff)}°C 차이입니다.`));
+        `${fmt(ytd.supply)}백만㎥로 전년 같은 기간보다 ${pctText(ytd.supplyYoy)}입니다. 같은 기간 평균기온은 ${signed(ytd.tempDiff)}°C 차이입니다.`));
       notes.push(D.callout('blue', '해석 시 주의',
         `${ytd.year}년은 ${ytd.month}월까지의 값이라 연간 합계로 비교하지 않고, 같은 달끼리만 비교합니다.`));
     }
@@ -540,7 +542,7 @@
     if (!hasMape) {
       $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
     } else if (overLimit.length) {
-      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => r.name).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다.`);
+      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다.`);
     } else {
       $('accCallout').innerHTML = D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
     }
@@ -640,16 +642,30 @@
     $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준${partial}, 연도별 추이는 12개월이 모두 있는 연도만 표시 · ${mapeNote}`;
   };
 
+  // 한 섹션을 그리다 오류가 나도 나머지는 그리도록 격리 (오류는 콘솔에 남기고, 그 섹션은 비어 있는 채로 둠)
+  const safely = (name, fn) => {
+    try {
+      fn();
+    } catch (err) {
+      console.error(`[전국 통계] ${name} 를 그리는 중 오류`, err);
+    }
+  };
+
   // 받아온 데이터로 화면 전체를 한 번 그림
   const draw = (regions, national) => {
+    // 지역 데이터가 없으면 그릴 수 없으므로 안내만 보여줌 (빈 목록으로 최솟값·최댓값을 구하면 오류가 나기 때문)
+    if (!Array.isArray(regions) || !regions.length || !national) {
+      $('kpis').innerHTML = D.callout('purple', '표시할 데이터가 없습니다', '지역별 공급 데이터를 불러오지 못했거나 비어 있습니다. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
     const summary = summarize(regions, national);
-    drawKpis(summary);
-    drawTreemap(summary);
-    drawDonut(summary);
-    drawTrend(summary);
-    drawBars(summary);
-    drawCorrelation(summary);
-    drawDataNote(summary);
+    safely('KPI', () => drawKpis(summary));
+    safely('트리맵', () => drawTreemap(summary));
+    safely('도넛', () => drawDonut(summary));
+    safely('연도별 추이', () => drawTrend(summary));
+    safely('민감도·예측 오차', () => drawBars(summary));
+    safely('상관계수', () => drawCorrelation(summary));
+    safely('데이터 안내', () => drawDataNote(summary));
     D.icons();   // 새로 그린 HTML 안의 아이콘 표시
   };
 

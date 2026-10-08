@@ -768,6 +768,11 @@
           return;
         }
         const v = M[r][c];
+        // 값이 없으면(서버가 계산할 수 없다고 null 을 보냄) 색 없이 '–' 만 표시. 마우스 설명 대상(.hm-cell)이 아님
+        if (v === null || v === undefined) {
+          h += `<div class="hm-na" aria-label="${labels[r]} 와 ${labels[c]}: 계산할 수 없음">–</div>`;
+          return;
+        }
         // 칸 1개: 배경색은 값에 따라, 글자는 소수 2자리
         h += `<div class="hm-cell" data-r="${r}" data-c="${c}" aria-label="${labels[r]} 와 ${labels[c]}: ${v.toFixed(2)}" style="background:${divColor(v)};color:${Math.abs(v) >= 0.83 ? '#fff' : 'var(--ink)'}">${v.toFixed(2)}</div>`;
       });

@@ -136,6 +136,7 @@
 .corr-axis>span:nth-child(2){display:flex;justify-content:space-between}
 .hm-row{display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap}
 .hm-cell{height:44px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.hm-na{height:44px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--mute);background:var(--surface-soft)}
 .hm-cell:hover{outline:2px solid var(--ink)}
 .hm-col{font-size:12px;font-weight:500;color:var(--mute);text-align:center;padding-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 호버한 칸의 행·열 이름 강조 */
