@@ -44,6 +44,31 @@
   const corrText = v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2);             // 상관계수 (범례와 같은 마이너스 기호)
   const percapOf = r => (r.supply * 1e6) / (r.pop * 1e4);                         // 백만㎥ / 만 명 → ㎥/인
   const sortedDesc = (rows, key) => [...rows].sort((a, b) => b[key] - a[key]);   // 원본은 그대로 두고 큰 순 정렬
+
+  // 스위치형 탭: 버튼은 한 번만 만들고 선택 표시만 바꿈 → 선택 배경(슬라이더)이 버튼 사이를 미끄러지듯 이동
+  // 반환값 sync() = 선택 배경 위치를 다시 맞춤 (숨겨져 있다가 보이게 될 때, 창 크기가 바뀔 때 호출)
+  const slideTabs = (el, items, value, onChange) => {
+    let current = value;
+    const slider = document.createElement('span');
+    slider.className = 'tab-slider';
+    const sync = () => {
+      el.querySelectorAll('.tab').forEach(b => b.classList.toggle('is-active', b.dataset.id === String(current)));
+      const on = el.querySelector('.tab.is-active');
+      if (!on || !on.offsetWidth) return;   // 숨겨진 상태에서는 크기를 알 수 없음
+      slider.style.cssText = `width:${on.offsetWidth}px;height:${on.offsetHeight}px;transform:translate(${on.offsetLeft}px,${on.offsetTop}px)`;
+    };
+    D.renderTabs(el, items, value, id => {
+      if (String(id) === String(current)) return;
+      current = id;
+      sync();
+      onChange(id);
+    });
+    el.appendChild(slider);
+    sync();
+    if (document.fonts) document.fonts.ready.then(sync);          // 웹폰트가 늦게 적용되면 탭 폭이 바뀌므로 다시 맞춤
+    requestAnimationFrame(() => el.classList.add('is-sliding'));   // 처음 위치를 잡을 때는 움직임 없이
+    return sync;
+  };
   const weightedAvg = (rows, key, total) => rows.reduce((sum, r) => sum + r[key] * r.supply, 0) / total;   // 공급량 가중 평균
   const swatches = colors => colors.map(c => `<i style="background:${c}"></i>`).join('');
   const inkOf = (step, steps) => (step === steps - 1 ? '#fff' : 'var(--ink)');   // 글자색: 가장 진한 단계만 흰색
@@ -154,25 +179,11 @@
       $('treemapLegend').innerHTML = legendOf();
     };
 
-    // 토글: 버튼은 한 번만 만들고 선택 표시만 바꿈 → 선택 배경(슬라이더)이 버튼 사이를 미끄러지듯 이동
-    const tabsEl = $('metricTabs');
-    const slider = document.createElement('span');
-    const syncTabs = () => {
-      tabsEl.querySelectorAll('.tab').forEach(b => b.classList.toggle('is-active', b.dataset.id === metric));
-      const on = tabsEl.querySelector('.tab.is-active');
-      slider.style.cssText = `width:${on.offsetWidth}px;height:${on.offsetHeight}px;transform:translate(${on.offsetLeft}px,${on.offsetTop}px)`;
-    };
-    D.renderTabs(tabsEl, METRIC_TABS, metric, m => {
-      if (m === metric) return;
+    // 토글: 색 기준 스위치
+    const syncTabs = slideTabs($('metricTabs'), METRIC_TABS, metric, m => {
       metric = m;
-      syncTabs();
       render(true);
     });
-    slider.className = 'tab-slider';
-    tabsEl.appendChild(slider);
-    syncTabs();
-    if (document.fonts) document.fonts.ready.then(syncTabs);          // 웹폰트가 늦게 적용되면 탭 폭이 바뀌므로 다시 맞춤
-    requestAnimationFrame(() => tabsEl.classList.add('is-sliding'));   // 처음 위치를 잡을 때는 움직임 없이
 
     $('treemapSub').textContent = `면적 = ${year} 공급량(백만㎥) · 클릭하면 상세 보기`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
     render();
@@ -450,14 +461,18 @@
   const CORR_BASES = [{ id: 'raw', label: '원본(계절 포함)' }, { id: 'yoy', label: '전년 동월 대비' }];
   const drawCorrelation = ({ national, period }) => {
     let view = 'factors', basis = 'raw';
+    const bases = national.corrYoy ? CORR_BASES : CORR_BASES.slice(0, 1);   // 전년 동월 대비 값이 없으면 기준 스위치는 숨김
+    let syncBasis = () => {};
     const render = () => {
       const matrix = basis === 'yoy' && national.corrYoy ? national.corrYoy : national.corr;
       $('corrBars').hidden = view !== 'factors';
       $('corrTable').hidden = view !== 'table';
-      D.renderTabs($('corrTabs'), CORR_VIEWS, view, v => { view = v; render(); });
-      D.renderTabs($('corrBasisTabs'), national.corrYoy ? CORR_BASES : CORR_BASES.slice(0, 1), basis, b => { basis = b; render(); });
+      $('corrBasisSwitch').hidden = view !== 'table' || bases.length < 2;
+      syncBasis();   // 보이게 된 뒤에 선택 배경 위치를 맞춤
       D.renderHeatmap($('heatmap'), national.corrLabels, matrix, { lower: true });
     };
+    slideTabs($('corrTabs'), CORR_VIEWS, view, v => { view = v; render(); });
+    syncBasis = slideTabs($('corrBasisTabs'), bases, basis, b => { basis = b; render(); });
     drawCorrBars(national);
     $('corrSub').textContent = `전국 월별 데이터${period ? '(' + period + ')' : ''} · 공급량과의 상관계수(r)`;
     $('corrNotes').innerHTML = corrNotesOf(national);

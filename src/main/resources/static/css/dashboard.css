@@ -50,6 +50,7 @@
 .bar-legend i.legend-dot{border-radius:50%}
 /* 트리맵 색 기준 토글: 작은 안내 글자를 토글 위에 둠 (토글이 색만 바꾼다는 것을 알려줌) */
 .metric-switch{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.head-switches{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
 .metric-switch-label{font-size:12px;font-weight:500;color:var(--mute)}
 /* 카드 제목 줄 오른쪽에 배지를 여러 개 나란히 놓을 때 */
 .head-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -62,13 +63,13 @@
 .tm-inner b{font-weight:700;line-height:1.25;white-space:nowrap}
 .tm-inner span{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tm-cell:hover .tm-inner{outline:2px solid var(--ink);outline-offset:-2px}
-/* 전년 대비/1인당 탭: 선택된 탭의 흰 배경(.tab-slider)이 national.js 에서 버튼 사이를 이동 (공용 .tab 모양은 그대로) */
-#metricTabs{position:relative}
-#metricTabs .tab{position:relative;z-index:1;transition:color var(--dur-base) var(--ease-out)}
-#metricTabs .tab.is-active{background:transparent;border-color:transparent}
-#metricTabs .tab-slider{position:absolute;top:0;left:0;z-index:0;box-sizing:border-box;background:var(--surface-card);border:1px solid var(--hairline);border-radius:var(--radius-md);pointer-events:none}
-#metricTabs.is-sliding .tab-slider{transition:transform var(--dur-base) var(--ease-out),width var(--dur-base) var(--ease-out)}
-@media (prefers-reduced-motion:reduce){#metricTabs .tab,#metricTabs.is-sliding .tab-slider{transition:none}}
+/* 스위치형 탭(.tabs--slide): 선택된 탭의 흰 배경(.tab-slider)이 national.js 의 slideTabs 에서 버튼 사이를 이동 (공용 .tab 모양은 그대로) */
+.tabs--slide{position:relative}
+.tabs--slide .tab{position:relative;z-index:1;transition:color var(--dur-base) var(--ease-out)}
+.tabs--slide .tab.is-active{background:transparent;border-color:transparent}
+.tabs--slide .tab-slider{position:absolute;top:0;left:0;z-index:0;box-sizing:border-box;background:var(--surface-card);border:1px solid var(--hairline);border-radius:var(--radius-md);pointer-events:none}
+.tabs--slide.is-sliding .tab-slider{transition:transform var(--dur-base) var(--ease-out),width var(--dur-base) var(--ease-out)}
+@media (prefers-reduced-motion:reduce){.tabs--slide .tab,.tabs--slide.is-sliding .tab-slider{transition:none}}
 /* 트리맵 툴팁: 마우스를 올린 칸의 자세한 값 (글자가 안 들어가는 작은 칸용) */
 .tm-tip{position:absolute;display:none;z-index:5;pointer-events:none;padding:8px 10px;background:var(--surface-dark);color:var(--white);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);font-size:12px;line-height:1.6;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tm-tip b{display:block;font-size:13px;margin-bottom:2px}

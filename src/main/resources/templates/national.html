@@ -33,7 +33,7 @@
                             </div>
                             <div class="metric-switch">
                                 <span class="metric-switch-label">색 기준</span>
-                                <div id="metricTabs" class="tabs"></div>
+                                <div id="metricTabs" class="tabs tabs--slide"></div>
                             </div>
                         </div>
                         <div class="card-body">
@@ -111,7 +111,7 @@
                     </section>
                 </div>
 
-                <!-- ⑤ 공급량과 함께 움직이는 요인: 보기 전환 탭 (#corrTabs): 공급량과의 상관 막대 (#corrBars) / 전체 상관표 (#corrTable, 기준 탭 #corrBasisTabs, #heatmap) + 오른쪽 설명 박스 (#corrNotes) -->
+                <!-- ⑤ 공급량과 함께 움직이는 요인: 보기 스위치 (#corrTabs): 공급량과의 상관 막대 (#corrBars) / 전체 상관표 (#corrTable > #heatmap, 기준 스위치 #corrBasisTabs) + 오른쪽 설명 박스 (#corrNotes) -->
                 <section class="card">
                     <div class="card-head">
                         <div>
@@ -119,17 +119,23 @@
                             <h3 class="card-title">공급량과 함께 움직이는 요인</h3>
                             <div class="card-sub" id="corrSub">전국 월별 데이터 · 공급량과의 상관계수(r)</div>
                         </div>
-                        <div class="metric-switch">
-                            <span class="metric-switch-label">보기</span>
-                            <div id="corrTabs" class="tabs"></div>
+                        <div class="head-switches">
+                            <!-- 기준 스위치는 상관표 화면일 때만 보임 (왼쪽에 둬서 보기 스위치 위치가 안 바뀌게) -->
+                            <div class="metric-switch" id="corrBasisSwitch" hidden>
+                                <span class="metric-switch-label">기준</span>
+                                <div id="corrBasisTabs" class="tabs tabs--slide"></div>
+                            </div>
+                            <div class="metric-switch">
+                                <span class="metric-switch-label">보기</span>
+                                <div id="corrTabs" class="tabs tabs--slide"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body grid-corr">
                         <div>
                             <div id="corrBars"></div>
                             <div id="corrTable" hidden>
-                                <div id="corrBasisTabs" class="tabs"></div>
-                                <div id="heatmap" class="mt-12"></div>
+                                <div id="heatmap"></div>
                             </div>
                         </div>
                         <div class="stack-sm" id="corrNotes"></div>
