@@ -2,8 +2,10 @@ package com.commit.project2.service;
 
 import com.commit.project2.dto.GasDTO;
 import com.commit.project2.dto.NationalDTO;
+import com.commit.project2.dto.NationalMonthDTO;
 import com.commit.project2.dto.NationalRegionDTO;
 import com.commit.project2.dto.NationalYearDTO;
+import com.commit.project2.dto.NationalYtdDTO;
 import com.commit.project2.dto.PyMapeDTO;
 import com.commit.project2.dto.PyMapeItemDTO;
 import com.commit.project2.mapper.GasMapper;
@@ -91,9 +93,12 @@ public class NationalService {
         .year(year)
         .supplyYoy(getSupplyYoy(year))
         .annual(getAnnualTrend())
+        .monthly(getMonthlySeries(monthly))
+        .ytd(getYtd(monthly))
         .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
-        .corr(calcCorrMatrix(monthly))
+        .corr(calcCorrMatrix(monthly, false))
+        .corrYoy(calcCorrMatrix(monthly, true))
         .corrPeriod(getPeriod(monthly))
         .build();
   }
@@ -112,6 +117,47 @@ public class NationalService {
       prev = row.getSupply();
     }
     return result;
+  }
+
+  // 월별 공급량·평균기온 (월별 곡선 차트용)
+  private List<NationalMonthDTO> getMonthlySeries(List<GasDTO> monthly) {
+    return monthly.stream()
+        .map(g -> NationalMonthDTO.builder()
+            .ym(g.getYm())
+            .supply(StatUtils.round(g.getSupply() / 1000.0, 1))   // 천㎥ -> 백만㎥
+            .avgTemp(g.getAvgTemp())
+            .build())
+        .toList();
+  }
+
+  // 올해 누적: 진행 중인 연도의 1월 ~ 마지막 달 합계를 작년 같은 기간과 비교
+  // 마지막 달이 12월이면(연도가 끝남) 연간 지표를 쓰므로 null, 작년에 같은 달이 모두 없어도 null
+  private NationalYtdDTO getYtd(List<GasDTO> monthly) {
+    if (monthly.isEmpty()) return null;
+    YearMonth last = YearMonth.parse(monthly.get(monthly.size() - 1).getYm());
+    if (last.getMonthValue() == 12) return null;
+    int year = last.getYear(), month = last.getMonthValue();
+
+    double currSupply = 0, prevSupply = 0, currTemp = 0, prevTemp = 0;
+    int currCount = 0, prevCount = 0;
+    for (GasDTO g : monthly) {
+      YearMonth ym = YearMonth.parse(g.getYm());
+      if (ym.getMonthValue() > month) continue;   // 마지막 달까지만 비교
+      if (ym.getYear() == year) {
+        currSupply += g.getSupply(); currTemp += g.getAvgTemp(); currCount++;
+      } else if (ym.getYear() == year - 1) {
+        prevSupply += g.getSupply(); prevTemp += g.getAvgTemp(); prevCount++;
+      }
+    }
+    if (currCount != month || prevCount != month) return null;
+
+    return NationalYtdDTO.builder()
+        .year(String.valueOf(year))
+        .month(month)
+        .supply(StatUtils.round(currSupply / 1000.0, 1))
+        .supplyYoy(calcYoy(currSupply, prevSupply))
+        .tempDiff(StatUtils.round(currTemp / currCount - prevTemp / prevCount, 1))
+        .build();
   }
 
   // 첫 달 ~ 마지막 달 (월별 데이터가 YM 오름차순이라는 전제)
@@ -133,7 +179,8 @@ public class NationalService {
 
   // 전국 월별 데이터로 계산한 변수 간 상관계수 행렬
   // 산업생산은 DB에 없어서 제외
-  private List<List<Double>> calcCorrMatrix(List<GasDTO> monthly) {
+  // yoy = true 이면 각 값에서 작년 같은 달 값을 뺀 "전년 동월 대비 변화"로 계산 (계절 패턴과 완만한 추세가 함께 빠짐, 작년 값이 없는 첫 12개월은 제외)
+  private List<List<Double>> calcCorrMatrix(List<GasDTO> monthly, boolean yoy) {
     List<double[]> series = List.of(
         toDoubleArray(monthly, GasDTO::getSupply),
         toDoubleArray(monthly, GasDTO::getAvgTemp),
@@ -141,6 +188,10 @@ public class NationalService {
         toDoubleArray(monthly, GasDTO::getPopulation),
         toDoubleArray(monthly, GasDTO::getHouseholdCnt)
     );
+    if (yoy) {
+      int[] prev = prevYearIndex(monthly);
+      series = series.stream().map(row -> diffFromPrevYear(row, prev)).toList();
+    }
 
     List<List<Double>> matrix = new ArrayList<>();
     for (double[] row : series) {
@@ -151,6 +202,27 @@ public class NationalService {
       matrix.add(line);
     }
     return matrix;
+  }
+
+  // 각 달의 "작년 같은 달" 위치 번호 (없으면 -1)
+  private int[] prevYearIndex(List<GasDTO> monthly) {
+    Map<String, Integer> indexOf = new java.util.HashMap<>();
+    for (int i = 0; i < monthly.size(); i++) {
+      indexOf.put(monthly.get(i).getYm(), i);
+    }
+    int[] prev = new int[monthly.size()];
+    for (int i = 0; i < prev.length; i++) {
+      prev[i] = indexOf.getOrDefault(YearMonth.parse(monthly.get(i).getYm()).minusYears(1).toString(), -1);
+    }
+    return prev;
+  }
+
+  // 작년 같은 달이 있는 달만 남겨서 (올해 값 - 작년 값) 을 만듦
+  private double[] diffFromPrevYear(double[] values, int[] prev) {
+    return java.util.stream.IntStream.range(0, values.length)
+        .filter(i -> prev[i] >= 0)
+        .mapToDouble(i -> values[i] - values[prev[i]])
+        .toArray();
   }
 
   // 월 난방도일 = max(0, 기준온도 - 월평균기온) * 해당 월 일수

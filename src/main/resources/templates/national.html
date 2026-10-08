@@ -4,7 +4,7 @@
   전국 통계 페이지 (URL: /national, 컨트롤러: DashboardController.national)
   - 이 파일은 빈 자리(id)만 만들고, 내용은 js/national.js 가 채움 (카드 제목과 고정 문구는 여기에 있음)
   - 공통 head / sidebar / topbar 는 fragments/layout.html 에서 가져옴
-  - 카드 순서(위 → 아래): KPI → 지역별 공급 현황 + 권역별 공급 비중 → 연도별 추이 → 기온 민감도 + 예측 오차 → 상관계수 → 데이터 안내
+  - 카드 순서(위 → 아래): KPI → 지역별 공급 현황 + 광역경제권별 공급 비중 → 연도별 추이 → 기온 민감도 + 예측 오차 → 상관계수 → 데이터 안내
 -->
 <head th:replace="~{fragments/layout :: head('전국 통계')}"></head>
 <body>
@@ -15,14 +15,14 @@
         <div class="page">
             <div class="page-head">
                 <h1>전국 통계</h1>
-                <p>17개 시·도의 공급 현황, 기온 민감도, 예측 오차를 비교합니다.</p>
+                <p>17개 시·도의 공급량 추이와 기온 민감도, 예측 오차를 비교합니다.</p>
             </div>
 
             <div class="stack">
                 <!-- ① KPI 카드 4개 (#kpis) -->
                 <div class="kpi-grid" id="kpis"></div>
 
-                <!-- ② 지역별 공급 현황: 트리맵 (면적 = 공급량, 색 = 토글로 선택) + 권역별 공급 비중: 도넛 -->
+                <!-- ② 지역별 공급 현황: 트리맵 (면적 = 공급량, 색 = 토글로 선택) + 광역경제권별 공급 비중: 도넛 -->
                 <div class="grid-wide">
                     <section class="card">
                         <div class="card-head">
@@ -33,7 +33,7 @@
                             </div>
                             <div class="metric-switch">
                                 <span class="metric-switch-label">색 기준</span>
-                                <div id="metricTabs" class="tabs"></div>
+                                <div id="metricTabs" class="tabs tabs--slide"></div>
                             </div>
                         </div>
                         <div class="card-body">
@@ -45,8 +45,8 @@
                         <div class="card-head">
                             <div>
                                 <div class="eyebrow">Composition</div>
-                                <h3 class="card-title">권역별 공급 비중</h3>
-                                <div class="card-sub" id="donutSub">17개 시·도를 5개 권역으로 합산</div>
+                                <h3 class="card-title">광역경제권별 공급 비중</h3>
+                                <div class="card-sub" id="donutSub">5+2 광역경제권 기준 · 17개 시·도 합산</div>
                             </div>
                         </div>
                         <div class="card-body donut-wrap">
@@ -59,19 +59,30 @@
                     </section>
                 </div>
 
-                <!-- ③ 연도별 추이: 차트 (막대 = 연간 공급량, 선 = 평균기온) + 오른쪽 설명 박스 (#trendNotes) -->
+                <!-- ③ 연도별 추이: 보기 스위치 (#trendTabs) → 연도별 차트 (막대 = 연간 공급량, 선 = 평균기온) / 월별 곡선 + 오른쪽 설명 박스 (#trendNotes) -->
                 <section class="card" id="trendCard">
                     <div class="card-head">
                         <div>
                             <div class="eyebrow">Trend</div>
-                            <h3 class="card-title">연도별 공급량과 평균기온</h3>
-                            <div class="card-sub" id="trendSub">막대 = 연간 공급량(백만㎥) · 선 = 평균기온(°C)</div>
+                            <h3 class="card-title" id="trendTitle">연도별 공급량과 평균기온</h3>
+                            <div class="card-sub" id="trendSub">12개월이 모두 있는 연도만 비교</div>
+                        </div>
+                        <div class="metric-switch" id="trendSwitch">
+                            <span class="metric-switch-label">보기</span>
+                            <div id="trendTabs" class="tabs tabs--slide"></div>
                         </div>
                     </div>
                     <div class="card-body grid-corr">
                         <div>
+                          <div id="trendYearView">
                             <div class="chart" style="height:300px"><canvas id="trendChart"></canvas></div>
-                            <div class="bar-legend"><i style="background:var(--seq-3)"></i>연간 공급량 (진한 막대 = 기준 연도)<i class="legend-dot" style="background:var(--yellow-600)"></i>평균기온</div>
+                            <div class="bar-legend"><i style="background:var(--seq-3)"></i>연간 공급량(백만㎥, 진한 막대 = 기준 연도)<i class="legend-dot" style="background:var(--yellow-700)"></i>평균기온(°C, 점마다 값 표시)</div>
+                          </div>
+                          <!-- 월별 보기: 연도마다 선 하나 (같은 달끼리 비교). 처음 누를 때 JS 가 차트를 그림 -->
+                          <div id="trendMonthView" hidden>
+                            <div class="chart" style="height:300px"><canvas id="trendMonthChart"></canvas></div>
+                            <div class="tm-legend" id="trendMonthLegend"></div>
+                          </div>
                         </div>
                         <div class="stack-sm" id="trendNotes"></div>
                     </div>
@@ -89,13 +100,14 @@
                         </div>
                         <div class="card-body">
                             <div class="chart" style="height:440px"><canvas id="sensChart"></canvas></div>
-                            <div class="bar-legend"><i style="background:var(--season-winter)"></i>전국 평균보다 높음<i style="background:var(--seq-2)"></i>전국 평균보다 낮음</div>
+                            <div class="tm-legend" id="sensLegend"></div>
+                            <div id="sensNote" class="mt-12"></div>
                         </div>
                     </section>
                     <section class="card">
                         <div class="card-head">
                             <div>
-                                <div class="eyebrow">Accuracy</div>
+                                <div class="eyebrow">Forecast Error</div>
                                 <h3 class="card-title">지역별 예측 오차</h3>
                                 <div class="card-sub">최근 12개월 MAPE(평균 오차율) · 높을수록 오차 큼</div>
                             </div>
@@ -104,22 +116,39 @@
                         </div>
                         <div class="card-body">
                             <div class="chart" style="height:440px"><canvas id="accChart"></canvas></div>
+                            <div class="tm-legend" id="accLegend"></div>
                             <div id="accCallout" class="mt-12"></div>
                         </div>
                     </section>
                 </div>
 
-                <!-- ⑤ 변수 간 상관계수: 히트맵 (#heatmap) + 오른쪽 설명 박스 (#corrNotes) -->
+                <!-- ⑤ 공급량과 함께 움직이는 요인: 보기 스위치 (#corrTabs): 공급량과의 상관 막대 (#corrBars) / 전체 상관표 (#corrTable > #heatmap, 기준 스위치 #corrBasisTabs) + 오른쪽 설명 박스 (#corrNotes) -->
                 <section class="card">
                     <div class="card-head">
                         <div>
                             <div class="eyebrow">Correlation</div>
-                            <h3 class="card-title">변수 간 상관계수</h3>
-                            <div class="card-sub" id="corrSub">전국 월별 데이터 · 계절 변동 포함</div>
+                            <h3 class="card-title">공급량과 함께 움직이는 요인</h3>
+                            <div class="card-sub" id="corrSub">전국 월별 데이터 · 공급량과의 상관계수(r)</div>
+                        </div>
+                        <div class="head-switches">
+                            <!-- 기준 스위치는 상관표 화면일 때만 보임 (왼쪽에 둬서 보기 스위치 위치가 안 바뀌게) -->
+                            <div class="metric-switch" id="corrBasisSwitch" hidden>
+                                <span class="metric-switch-label">기준</span>
+                                <div id="corrBasisTabs" class="tabs tabs--slide"></div>
+                            </div>
+                            <div class="metric-switch">
+                                <span class="metric-switch-label">보기</span>
+                                <div id="corrTabs" class="tabs tabs--slide"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body grid-corr">
-                        <div id="heatmap"></div>
+                        <div>
+                            <div id="corrBars"></div>
+                            <div id="corrTable" hidden>
+                                <div id="heatmap"></div>
+                            </div>
+                        </div>
                         <div class="stack-sm" id="corrNotes"></div>
                     </div>
                 </section>

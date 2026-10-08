@@ -11,7 +11,7 @@
 .map-card{position:sticky;top:80px}
 /* 2칸 배치 (한 칸이 320px 보다 좁아지면 자동으로 아래로 내려감) */
 .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
-.grid-wide{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px}
+.grid-wide{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
 .grid-corr{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
 .grid-sim{display:grid;grid-template-columns:minmax(280px,320px) minmax(0,1fr);gap:16px;align-items:start}
 .region-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
@@ -50,6 +50,7 @@
 .bar-legend i.legend-dot{border-radius:50%}
 /* 트리맵 색 기준 토글: 작은 안내 글자를 토글 위에 둠 (토글이 색만 바꾼다는 것을 알려줌) */
 .metric-switch{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.head-switches{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
 .metric-switch-label{font-size:12px;font-weight:500;color:var(--mute)}
 /* 카드 제목 줄 오른쪽에 배지를 여러 개 나란히 놓을 때 */
 .head-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -62,13 +63,13 @@
 .tm-inner b{font-weight:700;line-height:1.25;white-space:nowrap}
 .tm-inner span{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tm-cell:hover .tm-inner{outline:2px solid var(--ink);outline-offset:-2px}
-/* 전년 대비/1인당 탭: 선택된 탭의 흰 배경(.tab-slider)이 national.js 에서 버튼 사이를 이동 (공용 .tab 모양은 그대로) */
-#metricTabs{position:relative}
-#metricTabs .tab{position:relative;z-index:1;transition:color var(--dur-base) var(--ease-out)}
-#metricTabs .tab.is-active{background:transparent;border-color:transparent}
-#metricTabs .tab-slider{position:absolute;top:0;left:0;z-index:0;box-sizing:border-box;background:var(--surface-card);border:1px solid var(--hairline);border-radius:var(--radius-md);pointer-events:none}
-#metricTabs.is-sliding .tab-slider{transition:transform var(--dur-base) var(--ease-out),width var(--dur-base) var(--ease-out)}
-@media (prefers-reduced-motion:reduce){#metricTabs .tab,#metricTabs.is-sliding .tab-slider{transition:none}}
+/* 스위치형 탭(.tabs--slide): 선택된 탭의 흰 배경(.tab-slider)이 national.js 의 slideTabs 에서 버튼 사이를 이동 (공용 .tab 모양은 그대로) */
+.tabs--slide{position:relative}
+.tabs--slide .tab{position:relative;z-index:1;transition:color var(--dur-base) var(--ease-out)}
+.tabs--slide .tab.is-active{background:transparent;border-color:transparent}
+.tabs--slide .tab-slider{position:absolute;top:0;left:0;z-index:0;box-sizing:border-box;background:var(--surface-card);border:1px solid var(--hairline);border-radius:var(--radius-md);pointer-events:none}
+.tabs--slide.is-sliding .tab-slider{transition:transform var(--dur-base) var(--ease-out),width var(--dur-base) var(--ease-out)}
+@media (prefers-reduced-motion:reduce){.tabs--slide .tab,.tabs--slide.is-sliding .tab-slider{transition:none}}
 /* 트리맵 툴팁: 마우스를 올린 칸의 자세한 값 (글자가 안 들어가는 작은 칸용) */
 .tm-tip{position:absolute;display:none;z-index:5;pointer-events:none;padding:8px 10px;background:var(--surface-dark);color:var(--white);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);font-size:12px;line-height:1.6;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tm-tip b{display:block;font-size:13px;margin-bottom:2px}
@@ -80,7 +81,7 @@
 /* ===== Donut ===== */
 /* 카드가 좁아 범례가 아래로 내려가면 도넛은 가운데에 놓임 (옆에 나란히 놓일 때는 범례가 남는 폭을 채움) */
 .donut-wrap{display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap}
-.donut{position:relative;width:188px;height:188px;flex:none}
+.donut{position:relative;width:176px;height:176px;flex:none}
 /* 도넛 가운데 글자 (pointer-events:none → 마우스는 아래 차트로 통과) */
 .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center}
 .donut-center span{font-size:12px;color:var(--mute);font-weight:500}
@@ -98,6 +99,21 @@
 /* ===== Heatmap ===== */
 /* 상관계수 표: 칸 개수는 common.js renderHeatmap() 에서 grid-template-columns 로 지정 */
 .hm{display:grid;gap:2px}
+.corr-legend{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin-bottom:12px}
+.corr-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
+.corr-legend i:not(:first-child){margin-left:10px}
+.corr-row{padding:10px 0;border-top:1px solid var(--hairline-soft)}
+.corr-row:first-of-type{border-top:0}
+.corr-name{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.corr-name small{margin-left:6px;font-size:12px;font-weight:400;color:var(--mute)}
+.corr-bar{display:grid;grid-template-columns:56px 1fr 44px;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
+.corr-bar+.corr-bar{margin-top:4px}
+.corr-bar b{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.corr-track{position:relative;height:12px;background:var(--surface-soft);border-radius:3px}
+.corr-track::after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--ash)}
+.corr-fill{position:absolute;top:0;bottom:0;border-radius:3px}
+.corr-axis{display:grid;grid-template-columns:56px 1fr 44px;gap:8px;margin-top:2px;font-size:11px;color:var(--mute)}
+.corr-axis>span:nth-child(2){display:flex;justify-content:space-between}
 .hm-row{display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap}
 .hm-cell{height:44px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
 .hm-cell:hover{outline:2px solid var(--ink)}

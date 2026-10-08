@@ -324,12 +324,14 @@
   //     onClick   : 막대를 클릭했을 때 실행할 함수 (클릭한 막대의 data 항목을 넘겨줌)
   //     showValue : true 면 막대 끝에 값 표시
   //     axisTitle : 가로축 아래 제목
+  //     barThickness : 막대 두께(px), 기본 12
+  //   data 항목에 detail 글자를 넣으면 툴팁 둘째 줄에 보여줌
   //   예) D.hbar($('accChart'), 목록, { max: 20, ref: 8, refLabel: '기준 8%', showValue: true });
-  function hbar(canvas, data, { max, ref, refLabel, onClick, showValue = false, axisTitle } = {}) {
+  function hbar(canvas, data, { max, ref, refLabel, onClick, showValue = false, axisTitle, barThickness = 12 } = {}) {
     return new Chart(canvas, {
       type: 'bar',
       // 막대 이름 / 값 / 색을 data 배열에서 각각 뽑아냄
-      data: { labels: data.map(d => d.label), datasets: [{ data: data.map(d => d.value), backgroundColor: data.map(d => d.color), borderRadius: 3, barThickness: 12 }] },
+      data: { labels: data.map(d => d.label), datasets: [{ data: data.map(d => d.value), backgroundColor: data.map(d => d.color), borderRadius: 3, barThickness }] },
       plugins: showValue ? [valueLabel] : [],      // showValue 일 때만 값 표시 플러그인을 넣음
       options: {
         indexAxis: 'y',                            // 'y' = 막대를 가로로 눕힘
@@ -341,7 +343,7 @@
           y: { grid: { display: false }, ticks: { color: C('--ink'), font: { weight: '500', size: 13 } } }
         },
         // 기준선 + 툴팁 내용('7.4%' 형태)
-        plugins: { refLine: { value: ref, label: refLabel }, tooltip: { callbacks: { label: i => fmt(i.raw, 1) + '%' } } },
+        plugins: { refLine: { value: ref, label: refLabel }, tooltip: { callbacks: { label: i => fmt(i.raw, 1) + '%', afterLabel: i => data[i.dataIndex].detail || '' } } },
         // 막대 클릭: els = 클릭된 막대 목록. 있으면 그 막대의 data 항목으로 onClick 실행
         onClick: (_e, els) => { if (els.length && onClick) onClick(data[els[0].index]); },
         // 마우스가 막대 위에 있으면 손가락 모양 커서
