@@ -3,6 +3,7 @@ package com.commit.project2.service;
 import com.commit.project2.dto.*;
 import com.commit.project2.mapper.GasMapper;
 import com.commit.project2.mapper.RegionMapper;
+import com.commit.project2.util.StatUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -68,6 +69,7 @@ public class RegionService {
         for (PyMapeItemDTO item : py.getItems()) {
           if (item.getRegion().equals(region.getName())) {
             region.setMape(item.getMape());
+            region.setSensitivity(item.getSensitivity());
           }
         }
       }
@@ -138,10 +140,12 @@ public class RegionService {
     List<TempBinDTO> tempBins = buildTempBins(months, year);
 
 
-    /* ----- 4) & 5) 전체 월 원본 → 분기 평균 + 상관계수 ----- */
-    List<GasDTO> all = regionMapper.getGasAllMonths(regionId);
+    /* ----- 4) & 5) 전체 월 원본 → 분기 평균 + 상관계수 (공용 StatUtils 사용) ----- */
+    List<GasDTO> all = gasMapper.getMonthlyByRegion(regionId);
     List<PopQDTO> popQ = buildPopQ(all);
-    double popCorr = pearsonCorrelation(all);
+    double[] pops     = all.stream().mapToDouble(g -> toDouble(g.getPopulation())).toArray();
+    double[] supplies = all.stream().mapToDouble(g -> toDouble(g.getSupply())).toArray();
+    double popCorr = StatUtils.round(StatUtils.corr(pops, supplies), 2);
 
 
     /* ----- 응답 조립 ----- */
@@ -226,7 +230,7 @@ public class RegionService {
       bin.setDays(daysSum[i]);
       // 해당 구간에 들어온 일이 없으면 value=0 (0일 나누기 방지)
       bin.setValue(daysSum[i] > 0
-          ? round(supplySum[i] / daysSum[i], 2)
+          ? StatUtils.round(supplySum[i] / daysSum[i], 2)
           : 0.0);
       result.add(bin);
     }
@@ -280,50 +284,14 @@ public class RegionService {
       PopQDTO dto = new PopQDTO();
       // '21.Q1' 형식 (연도 뒤 두 자리 + Q + 분기)
       dto.setLabel(String.format("%02d.Q%d", yr % 100, q));
-      dto.setValue(round(avg / 10000.0, 1));       // 명 → 만 명
+      dto.setValue(StatUtils.round(avg / 10000.0, 1));       // 명 → 만 명
       result.add(dto);
     }
     return result;
   }
 
-  /**
-   * (인구, 공급량) 피어슨 상관계수.
-   *   r = Σ((x-x̄)(y-ȳ)) / √(Σ(x-x̄)² · Σ(y-ȳ)²)
-   *   값은 -1 ~ 1. 양쪽 중 하나라도 분산이 0이면 0 반환 (상수 데이터).
-   *   스케일에 무관하므로 원본 단위(명·만㎥) 그대로 넣어도 결과 같음.
-   */
-  private double pearsonCorrelation(List<GasDTO> all) {
-    int n = all.size();
-    if (n < 2) return 0.0;
-
-    double sumX = 0, sumY = 0;
-    for (GasDTO g : all) {
-      sumX += toDouble(g.getPopulation());
-      sumY += toDouble(g.getSupply());
-    }
-    double meanX = sumX / n;
-    double meanY = sumY / n;
-
-    double num = 0, denX = 0, denY = 0;
-    for (GasDTO g : all) {
-      double dx = toDouble(g.getPopulation()) - meanX;
-      double dy = toDouble(g.getSupply())     - meanY;
-      num  += dx * dy;
-      denX += dx * dx;
-      denY += dy * dy;
-    }
-    if (denX == 0 || denY == 0) return 0.0;
-    return round(num / Math.sqrt(denX * denY), 2);
-  }
-
-  /** null 안전 double 변환 (DB 결측치 보호용). */
+  /** null 안전 double 변환 (DB 결측치 보호용). StatUtils 에 없어 유지. */
   private double toDouble(Number v) {
     return v == null ? 0.0 : v.doubleValue();
-  }
-
-  /** 소수점 digits 자리에서 반올림. */
-  private double round(double v, int digits) {
-    double p = Math.pow(10, digits);
-    return Math.round(v * p) / p;
   }
 }
