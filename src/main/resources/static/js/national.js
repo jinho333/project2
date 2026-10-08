@@ -2,7 +2,7 @@
  * national.js — 전국 통계 페이지 (/national)
  *
  * 화면 구성 (위 → 아래)
- *   KPI 4개 → 지역별 공급 현황(트리맵) + 권역별 공급 비중(도넛) → 연도별 추이
+ *   KPI 4개 → 지역별 공급 현황(트리맵) + 광역경제권별 공급 비중(도넛) → 연도별 추이
  *   → 기온 민감도 + 예측 오차(막대) → 상관계수(히트맵) → 데이터 안내
  * 코드 구성: ① 상수  ② 계산·표시 도구  ③ 섹션별 그리기(화면 순서와 같음)  ④ 시작
  *
@@ -25,13 +25,15 @@
   const YOY_COLORS = ['var(--div-pos-1)', 'color-mix(in srgb, var(--div-pos-1), var(--div-pos-2))', 'var(--div-pos-2)', 'var(--div-pos-3)'];
   const SEQ_COLORS = ['--seq-1', '--seq-2', '--seq-3', '--seq-5'].map(v => `var(${v})`);
 
-  // 도넛 권역 (제주는 0.2% 라 단독 조각이 너무 작아 강원과 묶음)
+  // 도넛 권역: 정부 5+2 광역경제권 (5대 = 수도권·충청권·호남권·대경권·동남권, 2대 특별경제권 = 강원권·제주권)
   const GROUPS = [
     { label: '수도권', ids: ['se', 'gg', 'ic'] },
-    { label: '영남', ids: ['bs', 'dg', 'us', 'gb', 'gn'] },
-    { label: '충청', ids: ['dj', 'sj', 'cb', 'cn'] },
-    { label: '호남', ids: ['gj', 'jb', 'jn'] },
-    { label: '강원·제주', ids: ['gw', 'jj'] }
+    { label: '동남권', ids: ['bs', 'us', 'gn'] },
+    { label: '충청권', ids: ['dj', 'sj', 'cb', 'cn'] },
+    { label: '대경권', ids: ['dg', 'gb'] },
+    { label: '호남권', ids: ['gj', 'jb', 'jn'] },
+    { label: '강원권', ids: ['gw'] },
+    { label: '제주권', ids: ['jj'] }
   ];
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;   // 켜져 있으면 애니메이션 없이 바로 바뀜
@@ -194,7 +196,7 @@
     return slices;
   };
 
-  // 권역별 공급 비중 (도넛): 조각, 범례, 가운데 글자가 호버에 함께 반응. 권역은 상세 페이지가 없어 클릭 이동은 없음
+  // 광역경제권별 공급 비중 (도넛): 조각, 범례, 가운데 글자가 호버에 함께 반응. 권역은 상세 페이지가 없어 클릭 이동은 없음
   const drawDonut = ({ regions, year, total }) => {
     const slices = buildSlices(regions);
     const pctOf = d => fmt((d.value / total) * 100, 1);
@@ -206,7 +208,7 @@
     const rows = [...legend.querySelectorAll('.dl-row')];
 
     // 가운데 글자: 평소에는 전국 합계(백만㎥ → 억㎥), 호버하면 해당 조각의 비중과 공급량
-    $('donutSub').textContent = `${year}년 · 17개 시·도를 5개 권역으로 합산`;
+    $('donutSub').textContent = `${year}년 · 5+2 광역경제권 기준 · 17개 시·도 합산`;
     const center = $('donutCenter');
     const centerDefault = `<span>전국</span><b>${fmt(total / 100, 1)}</b><span>억㎥</span>`;
     center.innerHTML = centerDefault;
@@ -216,6 +218,7 @@
       data: { labels: slices.map(d => d.label), datasets: [{ data: slices.map(d => d.value), backgroundColor: slices.map(d => d.color), borderColor: '#fff', borderWidth: 2, hoverOffset: 8 }] },
       options: {
         cutout: '68%',
+        layout: { padding: 10 },                      // 호버로 조각이 튀어나올 자리를 미리 비워 둠 (안 비우면 가장자리가 잘림)
         animation: reduceMotion ? false : undefined,
         plugins: { tooltip: { enabled: false } },   // 정보는 가운데 글자로 보여주므로 툴팁은 생략
         events: ['mousemove'],                        // 마우스 이탈은 아래 mouseleave 에서 직접 처리 (차트가 따로 지우며 생기는 어긋남을 막음)

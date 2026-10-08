@@ -4,7 +4,7 @@
   전국 통계 페이지 (URL: /national, 컨트롤러: DashboardController.national)
   - 이 파일은 빈 자리(id)만 만들고, 내용은 js/national.js 가 채움 (카드 제목과 고정 문구는 여기에 있음)
   - 공통 head / sidebar / topbar 는 fragments/layout.html 에서 가져옴
-  - 카드 순서(위 → 아래): KPI → 지역별 공급 현황 + 권역별 공급 비중 → 연도별 추이 → 기온 민감도 + 예측 오차 → 상관계수 → 데이터 안내
+  - 카드 순서(위 → 아래): KPI → 지역별 공급 현황 + 광역경제권별 공급 비중 → 연도별 추이 → 기온 민감도 + 예측 오차 → 상관계수 → 데이터 안내
 -->
 <head th:replace="~{fragments/layout :: head('전국 통계')}"></head>
 <body>
@@ -22,7 +22,7 @@
                 <!-- ① KPI 카드 4개 (#kpis) -->
                 <div class="kpi-grid" id="kpis"></div>
 
-                <!-- ② 지역별 공급 현황: 트리맵 (면적 = 공급량, 색 = 토글로 선택) + 권역별 공급 비중: 도넛 -->
+                <!-- ② 지역별 공급 현황: 트리맵 (면적 = 공급량, 색 = 토글로 선택) + 광역경제권별 공급 비중: 도넛 -->
                 <div class="grid-wide">
                     <section class="card">
                         <div class="card-head">
@@ -45,8 +45,8 @@
                         <div class="card-head">
                             <div>
                                 <div class="eyebrow">Composition</div>
-                                <h3 class="card-title">권역별 공급 비중</h3>
-                                <div class="card-sub" id="donutSub">17개 시·도를 5개 권역으로 합산</div>
+                                <h3 class="card-title">광역경제권별 공급 비중</h3>
+                                <div class="card-sub" id="donutSub">5+2 광역경제권 기준 · 17개 시·도 합산</div>
                             </div>
                         </div>
                         <div class="card-body donut-wrap">
