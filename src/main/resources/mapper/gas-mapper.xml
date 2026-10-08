@@ -17,9 +17,23 @@
 
   </resultMap>
 
-  <!-- 이 파일은 전국 페이지 쿼리만 있음. 지역·예측 페이지 쿼리는 region-mapper.xml 참고 -->
+  <!-- 가스 월별 조회를 모은 공용 매퍼. 전국·지역 양쪽이 사용 -->
   <!-- 단위: SUPPLY = 천㎥, POPULATION = 명 (화면 단위 백만㎥·만 명 으로는 서비스에서 바꿈) -->
   <!-- REGION_ID 18 = '전국'(집계 행). 1~17 = 시·도 → 'REGION_ID = 18' 은 전국만, 'REGION_ID &lt; 18' 은 시·도만 -->
+
+  <!--지역 페이지에 필요한 쿼리-->
+  <!-- 한 지역의 전체 기간 월별 (region 파트 /stats 의 분기 집계·상관계수 계산용) -->
+  <!-- 단위는 환산하지 않음 (서비스에서 처리) · 2021-01 ~ 최신월, 한 지역 ≈ 60여 행 -->
+  <select id="getMonthlyByRegion" resultType="com.commit.project2.dto.GasDTO">
+    SELECT
+      g.YM         AS ym,
+      g.AVG_TEMP   AS avgTemp,
+      g.POPULATION AS population,
+      g.SUPPLY     AS supply
+    FROM gas_monthly g
+    WHERE g.REGION_ID = #{regionId}
+    ORDER BY g.YM
+  </select>
 
   <!--전국 페이지에 필요한 쿼리-->
   <!-- 전국(REGION_ID 18) 연간 공급량 합계(천㎥) -->

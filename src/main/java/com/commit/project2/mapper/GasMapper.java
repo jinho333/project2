@@ -9,6 +9,8 @@ import java.util.List;
 @Mapper
 public interface GasMapper {
   //지역 페이지에 필요한 추상 메서드
+  // 한 지역의 전체 기간 월별 (region 파트 /stats 의 분기 집계·상관계수 계산용)
+  List<GasDTO> getMonthlyByRegion(@Param("regionId") Long regionId);
 
   //전국 페이지에 필요한 추상 메서드
   // 전국(18) 연간 공급량 합계
