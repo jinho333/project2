@@ -441,7 +441,7 @@
   const linkRegions = bars => {
     const treemap = $('treemap');
     let active = null, timer = null;
-    bars.forEach(({ chart }) => { if (!reduceMotion) chart.options.animation = { duration: 150 }; });   // 연동 때 색 전환을 빠르게
+    bars.forEach(({ chart }) => { if (!reduceMotion) chart.options.animation = { duration: 110 }; });   // 연동 때 색 전환을 빠르게
     const apply = id => {
       if (id === active) return;
       active = id;
@@ -449,13 +449,14 @@
       treemap.querySelectorAll('.tm-cell').forEach(c => c.classList.toggle('is-linked', id !== null && Number(c.dataset.id) === id));
       bars.forEach(({ chart, items }) => {
         chart.data.datasets[0].backgroundColor = items.map(d => (id === null || d.id === id) ? d.color : fade(d.color, LINK_FADE));
-        chart.update();   // 색이 짧게(0.15초) 부드럽게 바뀜 (모션 줄이기가 켜져 있으면 바로 바뀜)
+        chart.update();   // 색이 짧게(0.11초) 부드럽게 바뀜 (모션 줄이기가 켜져 있으면 바로 바뀜)
       });
     };
-    // 지역 사이를 빠르게 지나갈 때 번쩍이지 않게, 잠깐 머물렀을 때만 바꿈 (막대 사이 틈에서 생기는 '해제'도 바로 반영하지 않음)
+    // 올릴 때는 바로 반응하고, 벗어날 때만 잠깐 기다림 (지역 사이를 지나가며 생기는 순간적인 '해제'가 번쩍임이 되지 않게)
     const setActive = id => {
       clearTimeout(timer);
-      timer = setTimeout(() => apply(id), id === null ? 80 : 40);
+      if (id !== null) apply(id);
+      else timer = setTimeout(() => apply(null), 80);
     };
     // 트리맵은 색 기준을 바꾸면 칸이 새로 그려지므로 칸마다 붙이지 않고 바깥 상자에서 한 번만 받음
     treemap.onmouseover = e => { const cell = e.target.closest('.tm-cell'); if (cell) setActive(Number(cell.dataset.id)); };

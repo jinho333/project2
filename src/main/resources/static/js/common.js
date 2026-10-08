@@ -345,6 +345,8 @@
         },
         // 기준선 + 툴팁 내용('7.4%' 형태)
         plugins: { refLine: { value: ref, label: refLabel }, tooltip: { callbacks: { label: i => fmt(i.raw, 1) + '%', afterLabel: i => data[i.dataIndex].detail || '' } } },
+        // 마우스가 막대 한 줄 전체(막대 사이 틈과 막대 오른쪽 빈 곳 포함)에 있으면 그 막대로 인식 → 반응이 빠르고 클릭하기 쉬움
+        interaction: { mode: 'index', axis: 'y', intersect: false },
         // 막대 클릭: els = 클릭된 막대 목록. 있으면 그 막대의 data 항목으로 onClick 실행
         onClick: (_e, els) => { if (els.length && onClick) onClick(data[els[0].index]); },
         // 마우스가 막대 위에 있으면 손가락 모양 커서
