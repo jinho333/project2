@@ -27,11 +27,21 @@
   const MAPE_LIMIT = 8;   // MAPE 경고 기준(%)
   const METRIC_TABS = [{ id: 'yoy', label: '전년 대비 증감률' }, { id: 'percap', label: '1인당 공급량' }];
 
-  // 트리맵 색: 진할수록 큰 값, 흰 글씨는 가장 진한 단계에만 씀
-  //  - 전년 대비: 모든 지역이 늘어서 0 기준 빨강-파랑으로 나누면 거의 한 색이 됨 → 빨강 한 계열을 실제 범위에 맞춰 4단계로
+  // 트리맵 색: 진할수록 큰 값. 글자색은 칸 색에 맞춰 어두운 글씨와 흰 글씨를 나눠 씀
+  //  - 색약(적록색약 포함)에서도 인접한 단계가 구분되도록 색약 시뮬레이션(적색약·녹색약·청황색약)으로 골랐음 (인접 단계 색 차이 ΔE 18 이상)
+  //  - 전년 대비: 모든 지역이 늘어서 0 기준 빨강-파랑으로 나누면 거의 한 색이 됨 → 빨강 한 계열을 실제 범위에 맞춰 4단계로 (뒤의 2단계는 흰 글씨)
   //  - 1인당: 중간 파랑(--seq-4)은 검정·흰 글씨 모두 대비가 모자라 뺀 4단계
-  const YOY_COLORS = ['var(--div-pos-1)', 'color-mix(in srgb, var(--div-pos-1), var(--div-pos-2))', 'var(--div-pos-2)', 'var(--div-pos-3)'];
+  //  - 값은 칸 안의 숫자로도 보이므로 색만으로 구분하지 않음
+  const YOY_COLORS = ['#f6d3cd', '#e8998f', '#b94a3f', '#7f1a14'];
+  const YOY_WHITE_FROM = 2;   // 이 번호부터 흰 글씨
+  // 예측 오차 막대 4단계 (노랑 → 주황 → 빨강 → 짙은 빨강). 밝기가 단계마다 분명히 내려가서 색약에서도 구분됨 (인접 단계 ΔE 21 이상)
+  const MAPE_COLORS = ['#f7c948', '#de7820', '#c43a2b', '#6e1410'];
   const SEQ_COLORS = ['--seq-1', '--seq-2', '--seq-3', '--seq-5'].map(v => `var(${v})`);
+
+  // 도넛 조각 색 (큰 권역부터 차례로). 색약(적록색약 포함)에서도 구분되도록 시뮬레이션으로 고름
+  //  - 고리에서 이웃한 조각끼리 색 차이 ΔE 29 이상, 모든 색 쌍 ΔE 15.5 이상 (적색약·녹색약·청황색약 모두)
+  //  - 파랑과 보라처럼 헷갈리기 쉬운 조합은 쓰지 않고, 밝기와 색상을 함께 다르게 했음. 공용 --cat 색은 다른 페이지가 쓰므로 건드리지 않음
+  const DONUT_COLORS = ['#0072b2', '#6b6e66', '#3d9bd6', '#1d3f7a', '#6e9b1a', '#c76a9c', '#9c2a22'];
 
   // 도넛 권역: 정부 5+2 광역경제권 (5대 = 수도권·충청권·호남권·대경권·동남권, 2대 특별경제권 = 강원권·제주권)
   const GROUPS = [
@@ -82,18 +92,12 @@
   };
   const weightedAvg = (rows, key, total) => rows.reduce((sum, r) => sum + r[key] * r.supply, 0) / total;   // 공급량 가중 평균
   const swatches = colors => colors.map(c => `<i style="background:${c}"></i>`).join('');
-  const inkOf = (step, steps) => (step === steps - 1 ? '#fff' : 'var(--ink)');   // 글자색: 가장 진한 단계만 흰색
+  const inkOf = (step, steps, whiteFrom = steps - 1) => (step >= whiteFrom ? '#fff' : 'var(--ink)');   // 글자색: whiteFrom 단계부터 흰색 (기본은 가장 진한 단계만)
 
   // '2021-01 ~ 2026-06' → '2021년 1월 ~ 2026년 6월'
   const toKoreanPeriod = period => (period || '').split(' ~ ')
     .map(ym => ym.replace(/^(\d{4})-(\d{2})$/, (_, y, m) => `${y}년 ${+m}월`)).join(' ~ ');
 
-  // 두 '#rrggbb' 색의 가운데 색 (막대 색이 부드럽게 바뀌려면 Chart.js 가 읽을 수 있는 색이어야 해서 color-mix 대신 직접 계산)
-  const mixHex = (a, b) => {
-    const [x, y] = [a, b].map(c => parseInt(c.slice(1), 16));
-    const mid = shift => Math.round((((x >> shift) & 255) + ((y >> shift) & 255)) / 2);
-    return '#' + [16, 8, 0].map(sh => mid(sh).toString(16).padStart(2, '0')).join('');
-  };
   // 색 → 투명도 alpha (호버하지 않은 도넛 조각은 0.3, 지역 연동으로 흐려지는 막대는 더 연하게 0.55). '#rrggbb' 외의 색(color-mix 등)도 처리
   const fade = (color, alpha = 0.3) => {
     const m = /^#([0-9a-f]{6})$/i.exec(color);
@@ -162,7 +166,7 @@
       if (metric === 'yoy') {
         // 증감률을 (최소 ~ 최대) 범위 안의 위치(0~1)로 바꾼 뒤 색 단계(0~3)로 나눔. 최대 = 최소이면 0으로 나누지 않게 1로 대신함
         const step = Number.isFinite(r.supplyYoy) ? Math.min(YOY_COLORS.length - 1, Math.floor(((r.supplyYoy - yoyMin) / (yoyMax - yoyMin || 1)) * YOY_COLORS.length)) : 0;
-        return { ...base, color: YOY_COLORS[step], ink: inkOf(step, YOY_COLORS.length), note: yoyText, tip: `${head}전년 대비 ${yoyText}<br>1인당 ${perCapitaText}` };
+        return { ...base, color: YOY_COLORS[step], ink: inkOf(step, YOY_COLORS.length, YOY_WHITE_FROM), note: yoyText, tip: `${head}전년 대비 ${yoyText}<br>1인당 ${perCapitaText}` };
       }
       const step = perCapitaCuts.filter(c => perCapita >= c).length;
       return { ...base, color: SEQ_COLORS[step], ink: inkOf(step, SEQ_COLORS.length), note: `${fmt(perCapita)}㎥`, tip: `${head}1인당 ${perCapitaText}<br>전년 대비 ${yoyText}` };
@@ -220,7 +224,7 @@
     const others = regions.filter(r => !grouped.has(r.id));   // 목록에 없는 지역이 생기면 '기타'로 보여줌
     if (others.length) slices.push(sliceOf('기타', others));
     slices.sort((a, b) => b.value - a.value);
-    slices.forEach((s, i) => { s.color = C(`--cat-${i + 1}`); });
+    slices.forEach((s, i) => { s.color = DONUT_COLORS[i % DONUT_COLORS.length]; });
     return slices;
   };
 
@@ -549,7 +553,7 @@
     // 예측 오차: 기준선을 넘으면 빨강. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
     const mapeAxisMax = Math.max(14, Math.ceil(Math.max(...byMape.map(r => r.mape || 0)) / 10) * 10);
     // 오차: 클수록 노랑 → 빨강 (4구간). 예측 오차를 못 받아오면 순위를 알 수 없어 한 색으로 둠
-    const mapeColors = [C('--yellow-500'), mixHex(C('--yellow-500'), C('--red-500')), C('--red-500'), C('--div-pos-3')];
+    const mapeColors = MAPE_COLORS;
     const mapeBand = bandsOf(byMape);
     const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
     const accChart = D.hbar($('accChart'), accItems,
