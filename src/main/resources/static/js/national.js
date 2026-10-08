@@ -383,40 +383,72 @@
     }
   };
 
-  // 히트맵 옆 설명 박스: r 값과 문장을 서버가 보낸 상관계수에서 만듦
-  const corrNotesOf = ({ corrLabels, corr }) => {
-    const corrOf = (a, b) => {
+  // 공급량과 함께 보여줄 요인 (이름, 보충 설명). 난방도일은 기온에서 계산한 값이라 같이 움직이는 게 당연함
+  const CORR_FACTORS = [
+    { name: '평균기온' },
+    { name: '난방도일', hint: '기온에서 계산' },
+    { name: '인구' },
+    { name: '세대수' }
+  ];
+
+  // 공급량과의 상관 막대: 요인마다 원본(계절 포함)과 계절 제거 두 줄. 가운데가 0, 오른쪽이 +, 왼쪽이 −
+  const drawCorrBars = ({ corrLabels, corr, corrYoy }) => {
+    const valueOf = (matrix, name) => {
+      const j = corrLabels.indexOf(name);
+      return !matrix || j < 0 ? null : matrix[0][j];   // 첫 변수(공급량)와의 상관
+    };
+    const bar = (tag, v, color) => {
+      if (v === null || v === undefined) return '';
+      const w = Math.abs(v) * 50;   // 한쪽 길이 = 50%, r = ±1 이면 끝까지
+      const side = v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`;
+      return `<div class="corr-bar"><span>${tag}</span><div class="corr-track"><span class="corr-fill" style="${side};background:${color}"></span></div><b>${corrText(v)}</b></div>`;
+    };
+    const raw = C('--stone'), yoyColor = C('--seq-4');
+    $('corrBars').innerHTML =
+      `<div class="corr-legend"><i style="background:${raw}"></i>원본(계절 포함)<i style="background:${yoyColor}"></i>전년 동월 대비 변화(계절·추세 제거)</div>` +
+      CORR_FACTORS.map(f =>
+        `<div class="corr-row"><div class="corr-name">${f.name}${f.hint ? `<small>${f.hint}</small>` : ''}</div>` +
+        bar('원본', valueOf(corr, f.name), raw) + bar('전년비', valueOf(corrYoy, f.name), yoyColor) + '</div>').join('') +
+      '<div class="corr-axis"><span></span><span><span>−1</span><span>0</span><span>+1</span></span><span></span></div>';
+  };
+
+  // 오른쪽 설명 박스: r 값과 문장을 서버가 보낸 상관계수에서 만듦
+  const corrNotesOf = ({ corrLabels, corr, corrYoy }) => {
+    const corrOf = (matrix, a, b) => {
       const i = corrLabels.indexOf(a), j = corrLabels.indexOf(b);
-      return i < 0 || j < 0 ? null : corr[i][j];
+      return !matrix || i < 0 || j < 0 ? null : matrix[i][j];
     };
     const notes = [];
-    const corrSupplyHdd = corrOf('공급량', '난방도일'), corrSupplyTemp = corrOf('공급량', '평균기온');
-    if (corrSupplyHdd !== null) {
-      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${corrText(corrSupplyHdd)}`,
-        corrSupplyTemp !== null && Math.abs(corrSupplyHdd) > Math.abs(corrSupplyTemp)
-          ? `기온(r = ${corrText(corrSupplyTemp)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.`
-          : '난방도일(18°C 기준)과 기온 모두 공급량과 비슷한 수준으로 연동됩니다.'));
+    const hdd = corrOf(corr, '공급량', '난방도일'), temp = corrOf(corr, '공급량', '평균기온');
+    const hddYoy = corrOf(corrYoy, '공급량', '난방도일'), tempYoy = corrOf(corrYoy, '공급량', '평균기온');
+    if (hdd !== null && hddYoy !== null && tempYoy !== null) {
+      notes.push(D.callout('blue', '계절·추세를 빼도 기온 영향은 남음',
+        `원본 난방도일 r = ${corrText(hdd)}은 겨울에 추우면서 공급이 많은 계절 패턴이 더해진 값입니다. 작년 같은 달과 비교한 변화끼리 보아도 난방도일 ${corrText(hddYoy)}, 평균기온 ${corrText(tempYoy)}로, 작년보다 추운 달일수록 공급이 늘었습니다.`));
+    } else if (hdd !== null) {
+      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${corrText(hdd)}`,
+        temp !== null && Math.abs(hdd) > Math.abs(temp) ? `기온(r = ${corrText(temp)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.` : '난방도일(18°C 기준)과 기온 모두 공급량과 비슷한 수준으로 연동됩니다.'));
     }
-    const corrPopHousehold = corrOf('인구', '세대수');
-    if (corrPopHousehold !== null) {
-      notes.push(D.callout('purple', `인구 ↔ 세대수 r = ${corrText(corrPopHousehold)}`,
-        Math.abs(corrPopHousehold) >= 0.9
-          ? `${corrPopHousehold < 0 ? '서로 반대로 움직이지만 ' : ''}상관이 매우 강해 거의 같은 정보를 담고 있어, 함께 쓰면 정보가 중복됩니다.`
-          : '두 변수의 상관이 강하지 않아 각각 별개의 정보로 볼 수 있습니다.'));
+    const pop = corrOf(corr, '공급량', '인구'), popYoy = corrOf(corrYoy, '공급량', '인구');
+    const hhYoy = corrOf(corrYoy, '공급량', '세대수');
+    if (pop !== null && popYoy !== null && hhYoy !== null) {
+      // 월별 공급량은 계절 변동이 커서 원본 상관이 낮으면 '영향 없음'으로 읽히기 쉬움 → 전년 동월 대비로도 같은 결과인지 함께 보여줌
+      const weak = Math.abs(popYoy) < 0.3 && Math.abs(hhYoy) < 0.3;
+      notes.push(D.callout('purple', '인구·세대수와는 뚜렷한 관계가 안 보임',
+        `인구는 원본 ${corrText(pop)}, 전년 동월 대비 ${corrText(popYoy)}이고 세대수는 원본 ${corrText(corrOf(corr, '공급량', '세대수'))}, 전년 동월 대비 ${corrText(hhYoy)}입니다. ${weak ? '계절과 추세를 빼도 모두 약해서, 월별 공급량의 움직임은 주로 기온이 설명합니다. 다만 5년 남짓한 자료라 인구의 장기 영향까지 배제하는 것은 아닙니다.' : '값이 일정하지 않아 해석에 주의가 필요합니다.'}`));
     }
-    // 월별 공급량은 계절 변동이 커서, 상관이 낮다고 '영향 없음'으로 읽으면 오해이므로 안내
-    const corrSupplyPop = corrOf('공급량', '인구');
-    if (corrSupplyPop !== null && Math.abs(corrSupplyPop) < 0.3) {
-      notes.push(D.callout('blue', `공급량 ↔ 인구 r = ${corrText(corrSupplyPop)}`,
-        '월별 공급량은 계절 변동이 커서, 인구의 영향이 이 수치에는 잘 드러나지 않을 수 있습니다.'));
+    const popHousehold = corrOf(corr, '인구', '세대수'), popHouseholdYoy = corrOf(corrYoy, '인구', '세대수');
+    if (popHousehold !== null && Math.abs(popHousehold) >= 0.9) {
+      notes.push(D.callout('blue', `인구 ↔ 세대수 r = ${corrText(popHousehold)}`,
+        `${popHousehold < 0 ? '서로 반대 방향으로 ' : ''}매우 강하게 움직이는 것처럼 보이지만, 전년 동월 대비 변화로는 ${popHouseholdYoy !== null ? corrText(popHouseholdYoy) : '-'}로 약해집니다. 두 변수가 장기 추세를 따라 함께 움직여서 생긴 값에 가깝습니다. (전체 상관표에서 확인)`));
     }
     return notes.join('');
   };
 
-  // 상관계수 (히트맵): lower = 대각선(자기 자신)과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
+  // 상관계수: 공급량과의 막대 + 접어 둔 전체 상관표(히트맵). lower = 대각선과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
   const drawCorrelation = ({ national, period }) => {
+    drawCorrBars(national);
     D.renderHeatmap($('heatmap'), national.corrLabels, national.corr, { lower: true });
-    $('corrSub').textContent = `전국 월별 데이터${period ? '(' + period + ')' : ''} · 계절 변동 포함`;
+    $('corrSub').textContent = `전국 월별 데이터${period ? '(' + period + ')' : ''} · 공급량과의 상관계수(r)`;
     $('corrNotes').innerHTML = corrNotesOf(national);
   };
 

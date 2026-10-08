@@ -111,17 +111,23 @@
                     </section>
                 </div>
 
-                <!-- ⑤ 변수 간 상관계수: 히트맵 (#heatmap) + 오른쪽 설명 박스 (#corrNotes) -->
+                <!-- ⑤ 공급량과 함께 움직이는 요인: 공급량과의 상관 막대 (#corrBars) + 전체 상관표(접힘, #heatmap) + 오른쪽 설명 박스 (#corrNotes) -->
                 <section class="card">
                     <div class="card-head">
                         <div>
                             <div class="eyebrow">Correlation</div>
-                            <h3 class="card-title">변수 간 상관계수</h3>
-                            <div class="card-sub" id="corrSub">전국 월별 데이터 · 계절 변동 포함</div>
+                            <h3 class="card-title">공급량과 함께 움직이는 요인</h3>
+                            <div class="card-sub" id="corrSub">전국 월별 데이터 · 공급량과의 상관계수(r)</div>
                         </div>
                     </div>
                     <div class="card-body grid-corr">
-                        <div id="heatmap"></div>
+                        <div>
+                            <div id="corrBars"></div>
+                            <details class="corr-more">
+                                <summary>전체 상관표 보기 (원본)</summary>
+                                <div id="heatmap"></div>
+                            </details>
+                        </div>
                         <div class="stack-sm" id="corrNotes"></div>
                     </div>
                 </section>

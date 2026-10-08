@@ -93,7 +93,8 @@ public class NationalService {
         .annual(getAnnualTrend())
         .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
-        .corr(calcCorrMatrix(monthly))
+        .corr(calcCorrMatrix(monthly, false))
+        .corrYoy(calcCorrMatrix(monthly, true))
         .corrPeriod(getPeriod(monthly))
         .build();
   }
@@ -133,7 +134,8 @@ public class NationalService {
 
   // 전국 월별 데이터로 계산한 변수 간 상관계수 행렬
   // 산업생산은 DB에 없어서 제외
-  private List<List<Double>> calcCorrMatrix(List<GasDTO> monthly) {
+  // yoy = true 이면 각 값에서 작년 같은 달 값을 뺀 "전년 동월 대비 변화"로 계산 (계절 패턴과 완만한 추세가 함께 빠짐, 작년 값이 없는 첫 12개월은 제외)
+  private List<List<Double>> calcCorrMatrix(List<GasDTO> monthly, boolean yoy) {
     List<double[]> series = List.of(
         toDoubleArray(monthly, GasDTO::getSupply),
         toDoubleArray(monthly, GasDTO::getAvgTemp),
@@ -141,6 +143,10 @@ public class NationalService {
         toDoubleArray(monthly, GasDTO::getPopulation),
         toDoubleArray(monthly, GasDTO::getHouseholdCnt)
     );
+    if (yoy) {
+      int[] prev = prevYearIndex(monthly);
+      series = series.stream().map(row -> diffFromPrevYear(row, prev)).toList();
+    }
 
     List<List<Double>> matrix = new ArrayList<>();
     for (double[] row : series) {
@@ -151,6 +157,27 @@ public class NationalService {
       matrix.add(line);
     }
     return matrix;
+  }
+
+  // 각 달의 "작년 같은 달" 위치 번호 (없으면 -1)
+  private int[] prevYearIndex(List<GasDTO> monthly) {
+    Map<String, Integer> indexOf = new java.util.HashMap<>();
+    for (int i = 0; i < monthly.size(); i++) {
+      indexOf.put(monthly.get(i).getYm(), i);
+    }
+    int[] prev = new int[monthly.size()];
+    for (int i = 0; i < prev.length; i++) {
+      prev[i] = indexOf.getOrDefault(YearMonth.parse(monthly.get(i).getYm()).minusYears(1).toString(), -1);
+    }
+    return prev;
+  }
+
+  // 작년 같은 달이 있는 달만 남겨서 (올해 값 - 작년 값) 을 만듦
+  private double[] diffFromPrevYear(double[] values, int[] prev) {
+    return java.util.stream.IntStream.range(0, values.length)
+        .filter(i -> prev[i] >= 0)
+        .mapToDouble(i -> values[i] - values[prev[i]])
+        .toArray();
   }
 
   // 월 난방도일 = max(0, 기준온도 - 월평균기온) * 해당 월 일수

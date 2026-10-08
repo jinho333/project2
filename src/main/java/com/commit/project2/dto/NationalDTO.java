@@ -19,5 +19,6 @@ public class NationalDTO {
   private Double mapeDelta;   // 전분기 대비 MAPE 변화(%p), FastAPI 가 계산 (서버가 꺼져 있으면 null)
   private List<String> corrLabels;  // 상관계수 표의 변수 이름 (행·열 순서 동일)
   private List<List<Double>> corr;  // 상관계수 행렬, corr[i][j] = corrLabels[i] 와 corrLabels[j] 의 r
+  private List<List<Double>> corrYoy;  // 전년 동월 대비 변화로 계산한 상관계수 행렬 (작년 같은 달과의 차이끼리 계산, corrLabels 와 같은 순서)
   private String corrPeriod;  // 상관계수 계산 기간 (예: 2021-01 ~ 2026-06)
 }
