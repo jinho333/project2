@@ -103,14 +103,15 @@
   const summarize = (regions, national) => {
     const year = national.year;   // 기준 연도 (서버가 정함: 12개월이 모두 있는 가장 최근 연도)
     const total = sortedDesc(regions, 'supply').reduce((sum, r) => sum + r.supply, 0);
-    const bySensitivity = sortedDesc(regions, 'sensitivity');
+    const bySensitivity = sortedDesc(regions.filter(r => Number.isFinite(r.sensitivity)), 'sensitivity');   // 예측 서버(FastAPI)가 꺼져 있으면 민감도가 비어서(null) 옴
     const byMape = sortedDesc(regions, 'mape');
     return {
       regions, national, year, total, bySensitivity, byMape,
       prevYear: String(Number(year) - 1),
       hasMape: regions.some(r => r.mape !== null && r.mape !== undefined),   // 예측 서버(FastAPI)가 꺼져 있으면 MAPE 가 비어서(null) 옴
       overLimit: byMape.filter(r => r.mape > MAPE_LIMIT),   // 경고 지역
-      avgSens: weightedAvg(bySensitivity, 'sensitivity', total),
+      hasSens: bySensitivity.length > 0,
+      avgSens: Number.isFinite(national.sensitivity) ? national.sensitivity : (bySensitivity.length ? weightedAvg(bySensitivity, 'sensitivity', total) : null),   // 서버(FastAPI)의 전국 값 우선
       avgMape: national.mape ?? weightedAvg(byMape, 'mape', total),   // 서버(FastAPI)의 전국 값 우선, 없으면 지역 값의 공급량 가중 평균
       period: toKoreanPeriod(national.corrPeriod)
     };
@@ -119,12 +120,12 @@
   /* ---------- ③ 섹션별 그리기 (화면 순서와 같음) ---------- */
 
   // KPI 4개(진행 중인 연도가 있으면 올해 누적 포함 5개): 전년 대비, 전분기 대비는 서버가 계산해서 보내줌
-  const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape }) => {
+  const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape, hasSens }) => {
     const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누적)
     $('kpis').innerHTML = [
       D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
       ytd && D.kpi({ label: `${ytd.year}년 누적 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
-      D.kpi({ label: '전국 기온 민감도 (공급량 가중)', value: fmt(avgSens, 1), unit: '%/°C', caption: '겨울철 1°C 하락 시 증가율', accent: 'var(--season-winter)' }),
+      D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 증가율 (예측 모델 기준)', accent: 'var(--season-winter)' }),
       // MAPE 는 비율이라 전분기와의 차이는 %p
       D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
       D.kpi({ label: '오차 큰 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
@@ -514,17 +515,22 @@
   };
 
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
-  const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape }) => {
-    // 민감도: 높을수록 진한 파랑 (4구간). 전국 평균은 기준선으로 따로 표시
-    const sensColors = ['--seq-2', '--seq-3', '--seq-4', '--seq-5'].map(v => C(v));
-    const sensBand = bandsOf(bySensitivity);
+  const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape, hasSens }) => {
+    // 민감도: 높을수록 진한 파랑 (4구간). 전국 값은 기준선으로 따로 표시. 값은 FastAPI 예측 모델 기반 (지역 상세 페이지와 같은 값)
     let setLinked = () => {};   // 두 차트를 다 만든 뒤 아래에서 연결
-    const sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
-    const sensChart = D.hbar($('sensChart'), sensItems,
-      { ref: avgSens, refLabel: `전국 평균 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
-    $('sensLegend').innerHTML = bandLegend(sensColors, '민감도 낮음', '높음');
-    const lowest = bySensitivity[bySensitivity.length - 1];
-    $('sensNote').innerHTML = D.callout('blue', '해석 시 주의', `겨울철 월별 자료로 추정한 값이라 표본이 적습니다. 가장 낮은 ${lowest.name}(${fmt(lowest.sensitivity, 1)}%)처럼 극단 값은 참고용으로 보세요.`);
+    let sensChart = null, sensItems = [];
+    if (hasSens) {
+      const sensColors = ['--seq-2', '--seq-3', '--seq-4', '--seq-5'].map(v => C(v));
+      const sensBand = bandsOf(bySensitivity);
+      sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
+      sensChart = D.hbar($('sensChart'), sensItems,
+        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
+      $('sensLegend').innerHTML = bandLegend(sensColors, '민감도 낮음', '높음');
+      $('sensNote').innerHTML = D.callout('blue', '계산 방식', '예측 모델의 기온 계수를 1인당 평균 공급량으로 나눈 값입니다. 지역 상세 페이지의 기온 민감도와 같은 값입니다.');
+    } else {
+      $('sensLegend').innerHTML = '';
+      $('sensNote').innerHTML = D.callout('purple', '기온 민감도를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
+    }
 
     // 예측 오차: 기준선을 넘으면 빨강. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
     const mapeAxisMax = Math.max(14, Math.ceil(Math.max(...byMape.map(r => r.mape || 0)) / 10) * 10);
@@ -534,7 +540,7 @@
     const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
     const accChart = D.hbar($('accChart'), accItems,
       { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: 'MAPE (%)', barThickness: 16 });
-    setLinked = linkRegions([{ chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }]);
+    setLinked = linkRegions([sensChart && { chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }].filter(Boolean));
     $('accLegend').innerHTML = hasMape ? bandLegend(mapeColors, '오차 작음', '큼') : '';
     $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>${overLimit.length}곳 경고` : '';
     $('badBadge').hidden = !hasMape;
