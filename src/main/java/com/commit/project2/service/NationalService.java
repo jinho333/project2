@@ -49,10 +49,22 @@ public class NationalService {
 
   // 받아온 MAPE 목록에서 지역 이름이 같은 값 찾기 (못 받아왔거나 그 지역이 없으면 null)
   private Double findMape(PyMapeDTO py, String regionName) {
+    PyMapeItemDTO item = findItem(py, regionName);
+    return item == null ? null : item.getMape();
+  }
+
+  // 받아온 목록에서 지역 이름이 같은 기온 민감도(%/°C) 찾기 (못 받아왔거나 그 지역이 없으면 null)
+  // FastAPI 예측 모델의 기온 계수로 계산한 값이라 지역 상세 페이지의 민감도와 같은 값
+  private Double findSensitivity(PyMapeDTO py, String regionName) {
+    PyMapeItemDTO item = findItem(py, regionName);
+    return item == null ? null : item.getSensitivity();
+  }
+
+  private PyMapeItemDTO findItem(PyMapeDTO py, String regionName) {
     if (py == null || py.getItems() == null) return null;
     for (PyMapeItemDTO item : py.getItems()) {
       if (item != null && regionName.equals(item.getRegion())) {
-        return item.getMape();
+        return item;
       }
     }
     return null;
@@ -82,6 +94,7 @@ public class NationalService {
         .annual(getAnnualTrend())
         .monthly(getMonthlySeries(monthly))
         .ytd(getYtd(monthly))
+        .sensitivity(findSensitivity(py, "전국"))         // FastAPI 모델의 전국 기온 민감도 (서버가 꺼져 있으면 null)
         .mape(findMape(py, "전국"))                      // FastAPI 가 계산한 전국 MAPE (지역 값의 평균과 다를 수 있음)
         .mapeDelta(py == null ? null : py.getDelta())  // FastAPI 가 계산한 실제 값 (최근 3개월 - 그 앞 3개월)
         .corrLabels(List.of("공급량", "평균기온", "난방도일", "인구", "세대수"))
@@ -247,6 +260,6 @@ public class NationalService {
   /* ---------- 시·도별 지표 ---------- */
   //  getRegions() 는 /api/national/regions 가 RegionService.getRegionSummaries() 로
   //  통합되면서(2026-10-08) 삭제됨. NationalApiController 가 regionService 를 직접 호출.
-  //  관련 private 메서드(calcSensitivity, calcPopulationTrend, getAvgPopulation, getMonthlyAvgTemp)
-  //  와 상수(REGION_NAMES, WINTER_MONTHS) 도 함께 제거.
+  //  관련 private 메서드(calcPopulationTrend, getAvgPopulation, getMonthlyAvgTemp)
+  //  와 상수(REGION_NAMES) 도 함께 제거.
 }
