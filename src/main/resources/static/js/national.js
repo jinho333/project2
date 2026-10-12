@@ -160,7 +160,7 @@
     // 칸 하나의 색·글자색·문구 (면적 값은 공통)
     const tileOf = r => {
       const perCapita = percapOf(r);
-      const head = `<b>${esc(r.name)}</b>가정용 공급량 ${fmt(r.supply, 1)} 백만㎥ (${fmt((r.supply / total) * 100, 1)}%)<br>`;
+      const head = `<b>${esc(r.name)}</b>공급량 ${fmt(r.supply, 1)} 백만㎥ (${fmt((r.supply / total) * 100, 1)}%)<br>`;
       const yoyText = pctText(r.supplyYoy), perCapitaText = `${fmt(perCapita)}㎥/인·년`;
       const base = { id: r.id, label: esc(r.name), value: r.supply };
       if (metric === 'yoy') {
@@ -190,7 +190,7 @@
     // 색 범례: 어떤 색이 큰 값인지 알려줌
     const legendOf = () => metric === 'yoy'
       ? `<span>${signed(yoyMin)}%</span>${swatches(YOY_COLORS)}<span>${signed(yoyMax)}%</span><span class="tm-legend-note">전국 평균 ${pctText(national.supplyYoy)} · 진할수록 많이 증가 · 기온 영향 포함</span>`
-      : `<span>${fmt(perCapitaMin)}㎥</span>${swatches(SEQ_COLORS)}<span>${fmt(perCapitaMax)}㎥</span><span class="tm-legend-note">1인당 연간 가정용 공급량 · 지역을 4등분해 색칠, 진할수록 많음</span>`;
+      : `<span>${fmt(perCapitaMin)}㎥</span>${swatches(SEQ_COLORS)}<span>${fmt(perCapitaMax)}㎥</span><span class="tm-legend-note">1인당 연간 공급량 · 지역을 4등분해 색칠, 진할수록 많음</span>`;
 
     // 칸이 너무 작아 이름이 안 들어간 지역(제주·세종 등)은 트리맵 아래에 한 줄로 알려줌 (화면 폭이 바뀌면 대상도 바뀜)
     const listSmallTiles = data => {
@@ -218,7 +218,7 @@
       render(true);
     });
 
-    $('treemapSub').textContent = `면적 = ${year} 가정용 공급량(백만㎥) · 클릭하면 상세 보기`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
+    $('treemapSub').textContent = `면적 = ${year} 공급량(백만㎥) · 클릭하면 상세 보기`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
     render();
     // 창 크기가 바뀌면 칸 크기를 다시 계산 (크기 조절이 0.15초 멈췄을 때 한 번만)
     window.addEventListener('resize', D.debounce(() => { render(); syncTabs(); }, 150));
@@ -299,7 +299,7 @@
     const warmestYear = pickBy((x, y) => x > y, 'avgTemp');
     const notes = [];
     if (warmestYear.year === lowYear.year) {
-      notes.push(D.callout('blue', `${warmestYear.year}년: 가장 따뜻하고 가정용 공급량은 가장 적음`,
+      notes.push(D.callout('blue', `${warmestYear.year}년: 가장 따뜻하고 공급량은 가장 적음`,
         `평균기온 ${fmt(warmestYear.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lowYear.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 일치합니다.`));
     }
     notes.push(D.callout('purple', '연도별 최대·최소', `가장 많은 해 ${peakYear.year}년 ${fmt(peakYear.supply)}백만㎥, 가장 적은 해 ${lowYear.year}년 ${fmt(lowYear.supply)}백만㎥ (${signed(((lowYear.supply - peakYear.supply) / peakYear.supply) * 100)}%)`));
@@ -311,7 +311,7 @@
     }));
     if (gap) {
       const [lo, hi] = gap.a.supply < gap.b.supply ? [gap.a, gap.b] : [gap.b, gap.a];
-      notes.push(D.callout('blue', '기온 외 요인', `${lo.year}년과 ${hi.year}년은 평균기온이 ${fmt(lo.avgTemp, 1)}°C로 비슷하지만 가정용 공급량은 ${hi.year}년이 ${fmt(gap.diff, 1)}% 더 많았습니다. 기온 외에 인구·세대 수나 산업용 수요도 영향을 줄 수 있습니다.`));
+      notes.push(D.callout('blue', '기온 외 요인', `${lo.year}년과 ${hi.year}년은 평균기온이 ${fmt(lo.avgTemp, 1)}°C로 비슷하지만 공급량은 ${hi.year}년이 ${fmt(gap.diff, 1)}% 더 많았습니다. 기온 외에 인구·세대 수나 주택 난방 방식의 변화도 영향을 줄 수 있습니다.`));
     }
     notes.push(D.callout('blue', '해석 시 주의', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
     return notes.join('');
@@ -358,14 +358,14 @@
     const tooltipLabel = i => {
       const a = annual[i.dataIndex];
       if (i.dataset.type === 'line') return `평균기온 ${fmt(a.avgTemp, 1)}°C`;
-      return `가정용 공급량 ${fmt(a.supply, 1)} 백만㎥` + (a.supplyYoy !== null && a.supplyYoy !== undefined ? ` (전년 대비 ${signed(a.supplyYoy)}%)` : '');
+      return `공급량 ${fmt(a.supply, 1)} 백만㎥` + (a.supplyYoy !== null && a.supplyYoy !== undefined ? ` (전년 대비 ${signed(a.supplyYoy)}%)` : '');
     };
 
     new Chart($('trendChart'), {
       data: {
         labels: annual.map(a => [`${a.year}년`, a.supplyYoy === null || a.supplyYoy === undefined ? '' : `전년 ${signed(a.supplyYoy)}%`]),   // 두 줄: 연도 / 전년 대비
         datasets: [
-          { type: 'bar', label: '연간 가정용 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, maxBarThickness: 56,
+          { type: 'bar', label: '연간 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, maxBarThickness: 56,
             backgroundColor: annual.map(a => a.year === year ? C('--seq-5') : C('--seq-3')) },
           { type: 'line', label: '평균기온', data: temps, yAxisID: 'y1', borderColor: C('--yellow-700'), backgroundColor: C('--yellow-700'), borderWidth: 2, pointRadius: 4, tension: 0 }
         ]
@@ -376,7 +376,7 @@
         interaction: { mode: 'index', intersect: false },   // 한 해에 올리면 공급량과 기온을 함께 보여줌
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false } },   // 두 줄 라벨이 기울지 않게
-          y: { min: 0, max: supplyMax, ticks: { callback: v => fmt(v) }, title: axisTitle('가정용 공급량 (백만㎥)') },
+          y: { min: 0, max: supplyMax, ticks: { callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
           y1: { display: false, min: tempMin, max: tempMax }
         },
         plugins: { tooltip: { callbacks: { title: items => `${annual[items[0].dataIndex].year}년`, label: tooltipLabel } } }
@@ -394,7 +394,7 @@
       const isMonth = view === 'month';
       $('trendYearView').hidden = isMonth;
       $('trendMonthView').hidden = !isMonth;
-      $('trendTitle').textContent = isMonth ? '월별 가정용 공급량 곡선' : '연도별 가정용 공급량과 평균기온';
+      $('trendTitle').textContent = isMonth ? '월별 공급량 곡선' : '연도별 공급량과 평균기온';
       $('trendSub').textContent = isMonth ? `${monthly[0].ym.slice(0, 4)}~${monthly[monthly.length - 1].ym.slice(0, 4)}년 · 같은 달끼리 연도 비교` : yearSub;
       $('trendNotes').innerHTML = isMonth ? monthlyNotesOf(national, year) : yearNotes;
       if (isMonth && !monthChart) monthChart = drawMonthChart(monthly, year, national.ytd);
@@ -431,7 +431,7 @@
         interaction: { mode: 'index', intersect: false },   // 한 달에 올리면 모든 연도 값을 함께 보여줌
         scales: {
           x: { grid: { display: false } },
-          y: { min: 0, ticks: { callback: v => fmt(v) }, title: { display: true, text: '가정용 공급량 (백만㎥)', color: C('--mute'), font: { size: 12 } } }
+          y: { min: 0, ticks: { callback: v => fmt(v) }, title: { display: true, text: '공급량 (백만㎥)', color: C('--mute'), font: { size: 12 } } }
         },
         plugins: { tooltip: { itemSort: (a, b) => b.parsed.y - a.parsed.y, callbacks: { label: i => `${i.dataset.label}  ${fmt(i.parsed.y, 1)} 백만㎥` } } }
       }
@@ -490,7 +490,7 @@
     if (base.length === 12) {
       const peak = base.reduce((a, b) => (b.supply > a.supply ? b : a)), low = base.reduce((a, b) => (b.supply < a.supply ? b : a));
       notes.push(D.callout('blue', '계절 곡선',
-        `${year}년 가정용 공급량은 ${Number(peak.ym.slice(5))}월 ${fmt(peak.supply)}백만㎥로 가장 많고 ${Number(low.ym.slice(5))}월 ${fmt(low.supply)}백만㎥로 가장 적어, 겨울 정점이 여름 최저의 약 ${fmt(peak.supply / low.supply, 1)}배입니다.`));
+        `${year}년 공급량은 ${Number(peak.ym.slice(5))}월 ${fmt(peak.supply)}백만㎥로 가장 많고 ${Number(low.ym.slice(5))}월 ${fmt(low.supply)}백만㎥로 가장 적어, 겨울 정점이 여름 최저의 약 ${fmt(peak.supply / low.supply, 1)}배입니다.`));
     }
     if (ytd) {
       notes.push(D.callout('purple', `${ytd.year}년 1~${ytd.month}월 누적`,
@@ -552,9 +552,9 @@
     if (hasSens) {
       const sensColors = ['--seq-2', '--seq-3', '--seq-4', '--seq-5'].map(v => C(v));
       const sensBand = bandsOf(bySensitivity);
-      sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `가정용 공급량 ${fmt(r.supply)} 백만㎥` }));
+      sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
       sensChart = D.hbar($('sensChart'), sensItems,
-        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '가정용 공급량 증가율 (%/°C)', barThickness: 16 });
+        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
       $('sensLegend').innerHTML = bandLegend(sensColors, '민감도 낮음', '높음');
       $('sensNote').innerHTML = D.callout('blue', '계산 방식', '예측 모델의 기온 계수를 1인당 평균 공급량으로 나눈 값입니다. 지역 상세 페이지의 기온 민감도와 같은 값입니다.');
     } else {
@@ -567,7 +567,7 @@
     // 오차: 클수록 노랑 → 빨강 (4구간). 예측 오차를 못 받아오면 순위를 알 수 없어 한 색으로 둠
     const mapeColors = MAPE_COLORS;
     const mapeBand = bandsOf(byMape);
-    const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `가정용 공급량 ${fmt(r.supply)} 백만㎥` }));
+    const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
     const accChart = D.hbar($('accChart'), accItems,
       { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: 'MAPE (%)', barThickness: 16 });
     setLinked = linkRegions([sensChart && { chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }].filter(Boolean));
@@ -626,7 +626,7 @@
       notes.push(D.callout('blue', '계절·추세를 빼도 기온 영향은 남음',
         `원본 난방도일 r = ${corrText(hdd)}은 겨울에 추우면서 공급이 많은 계절 패턴이 더해진 값입니다. 작년 같은 달과 비교한 변화끼리 보아도 난방도일 ${corrText(hddYoy)}, 평균기온 ${corrText(tempYoy)}로, 작년보다 추운 달일수록 공급이 늘었습니다.`));
     } else if (hdd !== null) {
-      notes.push(D.callout('blue', `가정용 공급량 ↔ 난방도일 r = ${corrText(hdd)}`,
+      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${corrText(hdd)}`,
         temp !== null && Math.abs(hdd) > Math.abs(temp) ? `기온(r = ${corrText(temp)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.` : '난방도일(18°C 기준)과 기온 모두 공급량과 비슷한 수준으로 연동됩니다.'));
     }
     const pop = corrOf(corr, '공급량', '인구'), popYoy = corrOf(corrYoy, '공급량', '인구');
@@ -659,12 +659,12 @@
       $('corrTable').hidden = view !== 'table';
       $('corrBasisSwitch').hidden = view !== 'table' || bases.length < 2;
       syncBasis();   // 보이게 된 뒤에 선택 배경 위치를 맞춤
-      D.renderHeatmap($('heatmap'), national.corrLabels.map(l => (l === '공급량' ? '가정용 공급량' : l)), matrix, { lower: true });   // 서버가 보내는 이름('공급량')은 그대로 두고 화면에 보이는 이름만 바꿈
+      D.renderHeatmap($('heatmap'), national.corrLabels, matrix, { lower: true });
     };
     slideTabs($('corrTabs'), CORR_VIEWS, view, v => { view = v; render(); });
     syncBasis = slideTabs($('corrBasisTabs'), bases, basis, b => { basis = b; render(); });
     drawCorrBars(national);
-    $('corrSub').textContent = `전국 월별 데이터${period ? '(' + period + ')' : ''} · 가정용 공급량과의 상관계수(r)`;
+    $('corrSub').textContent = `전국 월별 데이터${period ? '(' + period + ')' : ''} · 공급량과의 상관계수(r)`;
     $('corrNotes').innerHTML = corrNotesOf(national);
     render();
   };
