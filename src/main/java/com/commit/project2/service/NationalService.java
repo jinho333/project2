@@ -68,7 +68,7 @@ public class NationalService {
   }
 
   // 받아온 목록에서 지역 이름이 같은 기온 민감도(%/°C) 찾기 (못 받아왔거나 그 지역이 없으면 null)
-  // FastAPI 예측 모델의 기온 계수로 계산한 값이라 지역 상세 페이지의 민감도와 같은 값
+  // FastAPI 예측 모델의 기온 계수로 계산한 값 (공용 지역 목록 /api/regions 의 sensitivity 와 같은 값)
   private Double findSensitivity(PyMapeDTO py, String regionName) {
     PyMapeItemDTO item = findItem(py, regionName);
     return item == null ? null : item.getSensitivity();

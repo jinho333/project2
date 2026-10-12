@@ -547,7 +547,7 @@
 
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
   const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape, hasSens }) => {
-    // 민감도: 전국 값(기준선)보다 높으면 진한 파랑, 낮으면 밝은 파랑. 값은 FastAPI 예측 모델 기반 (지역 상세 페이지와 같은 값)
+    // 민감도: 전국 값(기준선)보다 높으면 진한 파랑, 낮으면 밝은 파랑. 값은 FastAPI 예측 모델 기반
     let setLinked = () => {};   // 두 차트를 다 만든 뒤 아래에서 연결
     let sensChart = null, sensItems = [];
     if (hasSens) {
@@ -556,7 +556,7 @@
       sensChart = D.hbar($('sensChart'), sensItems,
         { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 월 공급량 대비 증가분 (%/°C)', barThickness: 16 });
       $('sensLegend').innerHTML = `<i style="background:${sensHigh}"></i>전국보다 높음<i style="background:${SENS_LOW_COLOR}"></i>전국보다 낮음`;
-      $('sensNote').innerHTML = D.callout('blue', '계산 방식', '이번 달과 지난달 기온이 모두 1°C 낮을 때 늘어나는 공급량을, 연평균 월 공급량으로 나눈 추정값입니다. 겨울 달만 기준으로 하면 더 작게 나옵니다. 지역 상세 페이지의 기온 민감도와 같은 값입니다.');
+      $('sensNote').innerHTML = D.callout('blue', '계산 방식', '이번 달과 지난달 기온이 모두 1°C 낮을 때 늘어나는 공급량을, 연평균 월 공급량으로 나눈 추정값입니다. 겨울 달만 기준으로 하면 더 작게 나옵니다.');
     } else {
       $('sensLegend').innerHTML = '';
       $('sensNote').innerHTML = D.callout('purple', '기온 민감도를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
