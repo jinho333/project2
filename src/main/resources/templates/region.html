@@ -21,7 +21,10 @@
             <div class="grid-map">
                 <!-- 지역 타일맵 → #map -->
                 <section class="card map-card">
-                    <div class="card-head"><div><div class="eyebrow">Map</div><h3 class="card-title">지역 선택</h3><div class="card-sub">타일을 클릭해 지역을 바꿉니다</div></div></div>
+                    <div class="card-head">
+                        <div><div class="eyebrow">Map</div><h3 class="card-title">지역 선택</h3><div class="card-sub">타일을 클릭해 지역을 바꿉니다</div></div>
+                        <div class="legend"><span>단위: 백만㎥</span></div>
+                    </div>
                     <div class="card-body"><div id="map"></div></div>
                 </section>
 
@@ -60,7 +63,7 @@
                             </div>
                         </section>
                         <section class="card">
-                            <div class="card-head"><div><div class="eyebrow">Population</div><h3 class="card-title">분기별 인구수</h3><div class="card-sub">2021 Q1 – 2026 Q2 · 단위: 만 명</div></div></div>
+                            <div class="card-head"><div><div class="eyebrow">Population</div><h3 class="card-title">분기별 인구수</h3><div class="card-sub">2021년 1분기 – 2026년 2분기 · 단위: 만 명</div></div></div>
                             <div class="card-body">
                                 <div class="chart" style="height:220px"><canvas id="popChart"></canvas></div>
                                 <div id="popStats" class="stat-row mt-12"></div>
