@@ -61,7 +61,7 @@
 .tm-cell{position:absolute;padding:2px;cursor:pointer}
 .tm-inner{width:100%;height:100%;border-radius:4px;padding:8px 10px;overflow:hidden;display:flex;flex-direction:column;gap:2px}
 .tm-inner b{font-weight:700;line-height:1.25;white-space:nowrap}
-.tm-inner span{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tm-inner span{font-size:12px;font-weight:500;line-height:1.35;font-variant-numeric:tabular-nums;white-space:nowrap}   /* 줄 높이를 줄여 높이 50px 안팎의 칸에서도 두 줄이 넘치지 않게 */
 .tm-cell:hover .tm-inner,.tm-cell.is-linked .tm-inner,.tm-cell:focus-visible .tm-inner{outline:2px solid var(--ink);outline-offset:-2px}
 .tm-cell:focus{outline:none}
 /* 데이터를 받아오는 동안 KPI 자리에 보이는 빈 카드 */
