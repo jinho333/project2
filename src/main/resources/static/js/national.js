@@ -28,6 +28,8 @@
   //   가스 공급 업무에서 허용하는 오차를 알게 되면 그 값으로 바꿀 것 (이 상수 하나만 바꾸면 KPI·기준선·경고 설명이 함께 바뀜)
   //   8% 로 두었을 때는 17개 시·도 중 12곳이 걸려(평균 8.4% 근처) 경고로서 구분이 안 됨 → 10% 로 올림
   const MAPE_LIMIT = 10;
+  // 월별 곡선에서 과거 연도(기준 연도·진행 중 연도 제외) 선 색: 흰 배경 대비 3:1 이상(기존 --seq-3 은 2.6:1 이라 흐렸음), 기준 연도의 진한 파랑과는 색약 시뮬레이션에서도 구분됨
+  const PAST_YEAR_LINE = '#5b97d8';
   const METRIC_TABS = [{ id: 'yoy', label: '전년 대비 증감률' }, { id: 'percap', label: '1인당 공급량' }];
 
   // 트리맵 색: 진할수록 큰 값. 글자색은 칸 색에 맞춰 어두운 글씨와 흰 글씨를 나눠 씀
@@ -341,7 +343,7 @@
       data: {
         labels: annual.map(a => [`${a.year}년`, a.supplyYoy === null || a.supplyYoy === undefined ? '' : `전년 ${signed(a.supplyYoy)}%`]),   // 두 줄: 연도 / 전년 대비
         datasets: [
-          { type: 'bar', label: '연간 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, maxBarThickness: 56,
+          { type: 'bar', label: '연간 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, maxBarThickness: 80,
             backgroundColor: annual.map(a => a.year === year ? C('--seq-5') : C('--seq-3')) },
           { type: 'line', label: '평균기온', data: temps, yAxisID: 'y1', borderColor: C('--yellow-700'), backgroundColor: C('--yellow-700'), borderWidth: 2, pointRadius: 4, tension: 0 }
         ]
@@ -388,7 +390,7 @@
     });
     const years = Object.keys(byYear).sort();
     const styleOf = y => y === (ytd && ytd.year) ? { color: C('--yellow-700'), width: 3, radius: 3 }
-      : y === String(year) ? { color: C('--seq-5'), width: 3, radius: 0 } : { color: C('--seq-3'), width: 1.5, radius: 0 };
+      : y === String(year) ? { color: C('--seq-5'), width: 3, radius: 0 } : { color: PAST_YEAR_LINE, width: 2, radius: 0 };
     const nameOf = y => `${y}년` + (ytd && y === ytd.year ? `(1~${ytd.month}월)` : '');
 
     const chart = new Chart($('trendMonthChart'), {
