@@ -205,7 +205,7 @@
 
     const render = animate => {
       const data = regions.map(tileOf);
-      D.renderTreemap($('treemap'), data, { unit: '', onSelect: goToRegion });
+      D.renderTreemap($('treemap'), data, { unit: '', onSelect: goToRegion, showValue: false });   // 칸에는 이름 + 증감률(또는 1인당)만: 공급량은 면적이 보여주고 정확한 값은 마우스를 올리면 나옴
       if (animate && !reduceMotion) fadeFromPrevious(data);
       else data.forEach(d => { lastPaint[d.id] = d; });
       $('treemapLegend').innerHTML = legendOf();
@@ -218,7 +218,7 @@
       render(true);
     });
 
-    $('treemapSub').textContent = `면적 = ${year} 공급량(백만㎥) · 클릭하면 상세 보기`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
+    $('treemapSub').textContent = `면적 = ${year} 공급량 · 마우스 올리면 수치`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
     render();
     // 창 크기가 바뀌면 칸 크기를 다시 계산 (크기 조절이 0.15초 멈췄을 때 한 번만)
     window.addEventListener('resize', D.debounce(() => { render(); syncTabs(); }, 150));
