@@ -255,9 +255,11 @@
       },
       options: {
         scales: {
-          // autoSkip: false → 라벨 12개 전부 표시, maxRotation: 0 → 글자 기울이지 않음
-          x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0 } },
-          y: { beginAtZero: true, ticks: { callback: v => fmt(v, 1) } }
+          // autoSkip: false → 라벨 12개 전부 표시
+          // maxRotation: 45 → 라벨이 좁은 가로폭에서 겹치지 않도록 45° 기울임
+          x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 } },
+          // y축 눈금은 정수(500.0 → 500) — 월평균이라 백만㎥ 단위 큼
+          y: { beginAtZero: true, ticks: { callback: v => fmt(v) } }
         },
         plugins: {
           tooltip: {
@@ -312,10 +314,13 @@
         scales: {
           x: {
             grid: { display: false },
-            // 분기 라벨이 많아서 4개마다(= 1년마다) 하나씩만 표시, 나머지는 빈칸
-            ticks: { autoSkip: false, maxRotation: 0, callback: (v, i) => (i % 4 === 0 ? pop[i].label : '') }
+            // 분기 라벨 22개가 좁은 폭에 몰리면 겹치므로 4개마다(= 1년마다) 한 개만 표시
+            // 어차피 그 "Q1" 지점은 "그 해의 시작" 이라, 라벨은 Q 생략한 '2021' 식 연도로 표시해 가독성 ↑
+            // (툴팁은 pop[i].label 원본 '21.Q1' 그대로 유지되어 분기 정보도 호버 시 보임)
+            ticks: { autoSkip: false, maxRotation: 0, callback: (v, i) => (i % 4 === 0 ? '20' + pop[i].label.slice(0, 2) : '') }
           },
-          y: { ticks: { callback: v => fmt(v, 1) } }   // 인구는 변화폭이 작아서 0부터 시작하지 않음
+          // 인구는 변화폭이 작아 0부터 시작하지 않음. 눈금은 정수(만 명) 로 표시해 축 라벨 깔끔하게
+          y: { ticks: { callback: v => fmt(v) } }
         },
         plugins: {
           tooltip: { callbacks: { label: it => `${fmt(it.raw, 1)} 만 명` } }
