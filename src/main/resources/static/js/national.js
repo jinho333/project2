@@ -336,6 +336,22 @@
         ctx.restore();
       }
     };
+    // 기온 칸 꾸미기: 연한 배경 띠 + 아래 경계선 + 칸 이름(왼쪽 위). 두 차트가 붙어 보이지 않고 '막대 위의 보조 띠' 로 읽히게 함
+    //   beforeDraw = 눈금선·막대보다 먼저 그려서 배경이 모든 것 아래에 깔림
+    const tempStrip = {
+      id: 'tempStrip',
+      beforeDraw(chart) {
+        const { ctx, chartArea: a, scales: { y1 } } = chart;
+        ctx.save();
+        ctx.fillStyle = C('--surface-soft');
+        ctx.fillRect(a.left, y1.top, a.right - a.left, y1.bottom - y1.top);
+        ctx.strokeStyle = C('--hairline'); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(a.left, y1.bottom + 0.5); ctx.lineTo(a.right, y1.bottom + 0.5); ctx.stroke();
+        ctx.fillStyle = C('--mute'); ctx.font = `600 12px ${C('--font-sans')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillText('평균기온 (°C)', a.left + 8, y1.top + 6);
+        ctx.restore();
+      }
+    };
     const axisTitle = text => ({ display: true, text, color: C('--mute'), font: { size: 12 } });
     const tooltipLabel = i => {
       const a = annual[i.dataIndex];
@@ -355,7 +371,7 @@
           { type: 'line', label: '평균기온', data: temps, yAxisID: 'y1', borderColor: C('--yellow-700'), backgroundColor: C('--yellow-700'), borderWidth: 2, pointRadius: 4, tension: 0 }
         ]
       },
-      plugins: [barValues, tempValues],
+      plugins: [tempStrip, barValues, tempValues],
       options: {
         layout: { padding: { top: 8 } },
         interaction: { mode: 'index', intersect: false },   // 한 해에 올리면 공급량과 기온을 함께 보여줌
@@ -365,7 +381,7 @@
           //   → 연도·전년 대비 글자가 공급량 막대 바로 아래에 붙음
           y: { stack: 'trend', stackWeight: 2.2, min: 0, max: supplyMax, ticks: { stepSize: supplyMax / 3, callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
           // 기온 칸의 맨 위·맨 아래 눈금은 글자를 비움: 두 칸이 맞닿는 곳에서 공급량 눈금과 겹쳐 읽기 어려워서
-          y1: { stack: 'trend', stackWeight: 1, min: tempMin, max: tempMax, ticks: { stepSize: 1, callback: v => (v > tempMin && v < tempMax ? `${v}°C` : '') }, title: axisTitle('평균기온 (°C)') }
+          y1: { stack: 'trend', stackWeight: 1, min: tempMin, max: tempMax, ticks: { stepSize: 1, callback: v => (v > tempMin && v < tempMax ? `${v}°C` : '') } }
         },
         plugins: { tooltip: { callbacks: { title: items => `${annual[items[0].dataIndex].year}년`, label: tooltipLabel } } }
       }
