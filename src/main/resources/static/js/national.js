@@ -444,11 +444,12 @@
     const nowYear = ytd ? ytd.year : String(year), prevYear = String(Number(nowYear) - 1);
     const pair = years.includes(nowYear) && years.includes(prevYear) ? [prevYear, nowYear] : null;
     const legend = $('trendMonthLegend');
+    // 위: 빠른 보기(올해 vs 작년 / 전체), 아래: 연도 직접 선택. 역할이 달라서 라벨을 붙여 두 줄로 나눔
+    const quickBtn = (key, pressed, text) => `<button type="button" class="trend-chip trend-chip--quick" data-quick="${key}" aria-pressed="${pressed}">${text}</button>`;
     legend.innerHTML =
-      `<div class="trend-chips">${years.map(y => `<button type="button" class="trend-chip" data-y="${y}" aria-pressed="true"><i style="background:${styleOf(y).color}"></i>${nameOf(y)}</button>`).join('')}</div>` +
-      `<div class="trend-quick">${pair ? `<button type="button" class="trend-chip trend-chip--quick" data-quick="pair" aria-pressed="false">${prevYear} vs ${nowYear}</button>` : ''}` +
-      '<button type="button" class="trend-chip trend-chip--quick" data-quick="all" aria-pressed="true">전체</button></div>' +
-      '<div class="trend-hint">연도를 눌러 선을 켜고 끌 수 있습니다 · 굵은 선 = 기준 연도, 노랑 = 진행 중</div>';
+      `<div class="trend-group"><span class="trend-group-label">빠른 보기</span><div class="trend-quick">${pair ? quickBtn('pair', true, `${prevYear} vs ${nowYear}`) : ''}${quickBtn('all', !pair, '전체')}</div></div>` +
+      `<div class="trend-group"><span class="trend-group-label">연도 선택</span><div class="trend-chips">${years.map(y => `<button type="button" class="trend-chip" data-y="${y}" aria-pressed="true"><i style="background:${styleOf(y).color}"></i>${nameOf(y)}</button>`).join('')}</div></div>` +
+      '<div class="trend-hint">연도 버튼을 누르면 그 선을 켜고 끄고, 올려 두면 그 선이 강조됩니다 · 굵은 선 = 기준 연도, 노랑 = 진행 중</div>';
 
     let shown = new Set(years);
     const sync = () => {
@@ -483,6 +484,7 @@
     });
     legend.querySelector('[data-quick="all"]').onclick = () => { shown = new Set(years); sync(); };
     if (pair) legend.querySelector('[data-quick="pair"]').onclick = () => { shown = new Set(pair); sync(); };
+    if (pair) { shown = new Set(pair); sync(); }   // 처음 보기: 올해 vs 작년 (6개 선이 겹치면 계절 모양만 보이고 올해와 작년의 차이가 안 보임)
     return chart;
   };
 

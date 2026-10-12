@@ -84,14 +84,18 @@
 .tm-tip b{display:block;font-size:13px;margin-bottom:2px}
 /* 트리맵 색 범례 */
 /* 월별 곡선 범례: 연도 칩을 눌러 선을 켜고 끔 + 빠른 선택 (올해 vs 작년 / 전체) */
-.trend-legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin-top:12px}
+.trend-legend{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+/* 빠른 보기 / 연도 선택: 라벨 + 버튼들 한 줄씩 (버튼이 많아 줄이 바뀌어도 라벨은 첫 줄 옆에 그대로) */
+.trend-group{display:flex;align-items:flex-start;gap:10px}
+.trend-group-label{flex:none;width:56px;padding-top:4px;font-size:12px;color:var(--mute)}
 .trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:6px}
 .trend-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:12px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
 .trend-chip i{display:inline-block;width:14px;height:4px;border-radius:2px}
 .trend-chip:hover{background:var(--surface-soft)}
 .trend-chip[data-y][aria-pressed="false"]{opacity:.5}
 .trend-chip[data-y][aria-pressed="false"] i{background:var(--ash)!important}
-.trend-chip--quick[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
+/* 빠른 보기는 선택되면 진하게 채워 연도 버튼(테두리만 있음)과 구분 */
+.trend-chip--quick[aria-pressed="true"],.trend-chip--quick[aria-pressed="true"]:hover{background:var(--ink);border-color:var(--ink);color:var(--surface-card);font-weight:700}
 .trend-hint{flex-basis:100%;font-size:12px;color:var(--mute)}
 @media (prefers-reduced-motion:reduce){.trend-chip{transition:none}}
 .tm-legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--mute)}
