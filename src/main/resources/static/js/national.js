@@ -573,14 +573,11 @@
     $('accLegend').innerHTML = hasMape ? `<i style="background:${mapeOver}"></i>${MAPE_LIMIT}% 초과 (오차 큰 지역)<i style="background:${mapeOk}"></i>${MAPE_LIMIT}% 이하` : '';
     $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>오차 큰 지역 ${overLimit.length}곳` : '';
     $('badBadge').hidden = !hasMape;
-    // 원인은 지역마다 다를 수 있어서 단정하는 문구는 넣지 않고, 어떻게 구한 값인지만 설명. 지역 이름은 데이터에서 뽑음
-    if (!hasMape) {
-      $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
-    } else if (overLimit.length) {
-      $('accCallout').innerHTML = D.callout('red', '오차 큰 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 실제 기온을 넣고 최근 12개월 공급량을 다시 맞혀 본 평균 오차율이 ${MAPE_LIMIT}%를 넘는 지역입니다. 나머지 ${byMape.length - overLimit.length}곳은 ${MAPE_LIMIT}% 이하로, 일반적으로 '매우 정확'한 수준입니다. 실제 예측은 미래 기온을 몰라 평년 기온을 쓰므로 이보다 오차가 클 수 있습니다.`);
-    } else {
-      $('accCallout').innerHTML = D.callout('green', '오차 큰 지역 없음', `모든 지역의 평균 오차율이 ${MAPE_LIMIT}% 이하입니다. 실제 예측은 미래 기온을 몰라 평년 기온을 쓰므로 이보다 오차가 클 수 있습니다.`);
-    }
+    // 설명 박스는 어떻게 구한 값인지와 한계만 알림 (민감도 카드의 '계산 방식' 박스와 같은 톤).
+    //   오차 큰 지역의 이름·개수는 배지, 범례, 빨간 막대, KPI 카드가 이미 보여줘서 박스에서는 반복하지 않음. 원인은 지역마다 다를 수 있어 단정하지 않음
+    $('accCallout').innerHTML = hasMape
+      ? D.callout('blue', '계산 방식', `실제 기온을 넣고 최근 12개월 공급량을 다시 맞혀 본 평균 오차율입니다. ${MAPE_LIMIT}% 이하는 일반적으로 '매우 정확'한 수준입니다. 실제 예측은 미래 기온을 몰라 평년 기온을 쓰므로 이보다 오차가 클 수 있습니다.`)
+      : D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
   };
 
   // 공급량과 함께 보여줄 요인 (이름, 보충 설명). 난방도일은 기온에서 계산한 값이라 같이 움직이는 게 당연함
