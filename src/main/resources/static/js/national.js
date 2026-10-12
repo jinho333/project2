@@ -40,7 +40,10 @@
   const YOY_COLORS = ['#f6d3cd', '#e8998f', '#b94a3f', '#7f1a14'];
   const YOY_WHITE_FROM = 2;   // 이 번호부터 흰 글씨
   // 예측 오차 막대 4단계 (노랑 → 주황 → 빨강 → 짙은 빨강). 밝기가 단계마다 분명히 내려가서 색약에서도 구분됨 (인접 단계 ΔE 21 이상)
-  const MAPE_COLORS = ['#f7c948', '#de7820', '#c43a2b', '#6e1410'];
+  // 막대 색: 지역은 이름이 있는 독립 항목이라 값으로 색을 나누지 않음(길이가 이미 값을 보여줌). 기준선이 있는 차트만 기준에 따라 두 그룹으로 나눔
+  //   기온 민감도: 전국 값보다 높음 = 진한 파랑(--seq-5), 낮음 = 밝은 파랑 (흰 배경 대비 3:1 이상, 두 색은 색약 시뮬레이션에서도 구분됨)
+  //   예측 오차: 기준(MAPE_LIMIT) 초과 = 경고 빨강(--red-500), 이하 = 회색(--ash). 막대마다 값 글자가 있어 회색 대비 2.8:1 은 허용 범위
+  const SENS_LOW_COLOR = '#5b97d8';
   const SEQ_COLORS = ['--seq-1', '--seq-2', '--seq-3', '--seq-5'].map(v => `var(${v})`);
 
   // 도넛 조각 색 (큰 권역부터 차례로). 색약(적록색약 포함)에서도 구분되도록 시뮬레이션으로 고름
@@ -143,7 +146,7 @@
     $('kpis').innerHTML = [
       D.kpi({ label: `전국 연간 가정용 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
       ytd && D.kpi({ label: `${ytd.year}년 누적 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
-      D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 증가율 (예측 모델 기준)', accent: 'var(--season-winter)' }),
+      D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 평균 월 공급량 대비 증가분 (예측 모델 기준)', accent: 'var(--season-winter)' }),
       // MAPE 는 비율이라 전분기와의 차이는 %p
       D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
       D.kpi({ label: '오차 큰 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
@@ -493,16 +496,6 @@
     return chart;
   };
 
-  // 값이 큰 순으로 정렬된 지역 목록을 4구간(4분위)으로 나눔 → 지역 id 별 0(낮음)~3(높음). 극단 값 하나에 색이 쏠리지 않게 값이 아닌 순위로 나눔
-  const bandsOf = rows => {
-    const bands = {};
-    rows.forEach((r, i) => { bands[r.id] = 3 - Math.min(3, Math.floor((i * 4) / rows.length)); });
-    return bands;
-  };
-  // 색 범례: 낮음 → 높음 (4구간)
-  const bandLegend = (colors, lowText, highText) =>
-    `${lowText}${colors.map(c => `<i style="background:${c}"></i>`).join('')}${highText}<span class="tm-legend-note">4분위 (순위 기준)</span>`;
-
   // 지역 연동: 트리맵 칸이나 막대에 올리면 같은 지역이 모든 차트에서 함께 강조되고 나머지는 흐려짐 (id = 지역 번호, 벗어나면 null)
   //   bars = [{ chart, items }]  items = 그 차트의 막대 목록 [{ id, color }]
   const LINK_FADE = 0.55;   // 연동되지 않은 막대의 투명도 (클수록 덜 흐림)
@@ -538,41 +531,39 @@
 
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
   const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape, hasSens }) => {
-    // 민감도: 높을수록 진한 파랑 (4구간). 전국 값은 기준선으로 따로 표시. 값은 FastAPI 예측 모델 기반 (지역 상세 페이지와 같은 값)
+    // 민감도: 전국 값(기준선)보다 높으면 진한 파랑, 낮으면 밝은 파랑. 값은 FastAPI 예측 모델 기반 (지역 상세 페이지와 같은 값)
     let setLinked = () => {};   // 두 차트를 다 만든 뒤 아래에서 연결
     let sensChart = null, sensItems = [];
     if (hasSens) {
-      const sensColors = ['--seq-2', '--seq-3', '--seq-4', '--seq-5'].map(v => C(v));
-      const sensBand = bandsOf(bySensitivity);
-      sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
+      const sensHigh = C('--seq-5');
+      sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? sensHigh : SENS_LOW_COLOR, detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
       sensChart = D.hbar($('sensChart'), sensItems,
-        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
-      $('sensLegend').innerHTML = bandLegend(sensColors, '민감도 낮음', '높음');
-      $('sensNote').innerHTML = D.callout('blue', '계산 방식', '예측 모델의 기온 계수를 1인당 평균 공급량으로 나눈 값입니다. 지역 상세 페이지의 기온 민감도와 같은 값입니다.');
+        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 월 공급량 대비 증가분 (%/°C)', barThickness: 16 });
+      $('sensLegend').innerHTML = `<i style="background:${sensHigh}"></i>전국보다 높음<i style="background:${SENS_LOW_COLOR}"></i>전국보다 낮음`;
+      $('sensNote').innerHTML = D.callout('blue', '계산 방식', '이번 달과 지난달 기온이 모두 1°C 낮을 때 늘어나는 공급량을, 연평균 월 공급량으로 나눈 추정값입니다. 겨울 달만 기준으로 하면 더 작게 나옵니다. 지역 상세 페이지의 기온 민감도와 같은 값입니다.');
     } else {
       $('sensLegend').innerHTML = '';
       $('sensNote').innerHTML = D.callout('purple', '기온 민감도를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
     }
 
-    // 예측 오차: 기준선을 넘으면 빨강. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
+    // 예측 오차: 기준(MAPE_LIMIT)을 넘으면 빨강, 나머지는 회색. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
     const mapeAxisMax = Math.max(14, Math.ceil(Math.max(...byMape.map(r => r.mape || 0)) / 10) * 10);
-    // 오차: 클수록 노랑 → 빨강 (4구간). 예측 오차를 못 받아오면 순위를 알 수 없어 한 색으로 둠
-    const mapeColors = MAPE_COLORS;
-    const mapeBand = bandsOf(byMape);
-    const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
+    // 예측 오차를 못 받아오면 기준을 알 수 없어 한 색(--stone)으로 둠
+    const mapeOver = C('--red-500'), mapeOk = C('--ash');
+    const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? (r.mape > MAPE_LIMIT ? mapeOver : mapeOk) : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
     const accChart = D.hbar($('accChart'), accItems,
-      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: 'MAPE (%)', barThickness: 16 });
+      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 오차율 (%)', barThickness: 16 });
     setLinked = linkRegions([sensChart && { chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }].filter(Boolean));
-    $('accLegend').innerHTML = hasMape ? bandLegend(mapeColors, '오차 작음', '큼') : '';
-    $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>${overLimit.length}곳 경고` : '';
+    $('accLegend').innerHTML = hasMape ? `<i style="background:${mapeOver}"></i>${MAPE_LIMIT}% 초과 (오차 큰 지역)<i style="background:${mapeOk}"></i>${MAPE_LIMIT}% 이하` : '';
+    $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>오차 큰 지역 ${overLimit.length}곳` : '';
     $('badBadge').hidden = !hasMape;
     // 원인은 지역마다 다를 수 있어서 단정하는 문구는 넣지 않고, 어떻게 구한 값인지만 설명. 지역 이름은 데이터에서 뽑음
     if (!hasMape) {
       $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
     } else if (overLimit.length) {
-      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다. (일반적으로 MAPE 10% 이하를 '매우 정확'으로 봅니다)`);
+      $('accCallout').innerHTML = D.callout('red', '오차 큰 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 실제 기온을 넣고 최근 12개월 공급량을 다시 맞혀 본 평균 오차율이 ${MAPE_LIMIT}%를 넘는 지역입니다. 나머지 ${byMape.length - overLimit.length}곳은 ${MAPE_LIMIT}% 이하로, 일반적으로 '매우 정확'한 수준입니다. 실제 예측은 미래 기온을 몰라 평년 기온을 쓰므로 이보다 오차가 클 수 있습니다.`);
     } else {
-      $('accCallout').innerHTML = D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
+      $('accCallout').innerHTML = D.callout('green', '오차 큰 지역 없음', `모든 지역의 평균 오차율이 ${MAPE_LIMIT}% 이하입니다. 실제 예측은 미래 기온을 몰라 평년 기온을 쓰므로 이보다 오차가 클 수 있습니다.`);
     }
   };
 
