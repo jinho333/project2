@@ -295,7 +295,8 @@
     });
   };
 
-  // 연도별 추이: 막대 = 연간 공급량(기준 연도는 진하게), 선 = 평균기온. 서버가 12개월이 모두 있는 연도만 보내줌
+  // 연도별 추이: 위 칸 = 평균기온 선(실제 눈금), 아래 칸 = 연간 공급량 막대(기준 연도는 진하게). 한 차트 안에서 세로로 두 칸(stack)으로 나눔
+  //   서버가 12개월이 모두 있는 연도만 보내줌
   const drawTrend = ({ national, year }) => {
     const annual = national.annual || [];
     if (!annual.length) {
@@ -305,11 +306,14 @@
     $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 12개월이 모두 있는 연도만 비교 (${annual.length}개 연도, 참고용)`;
 
     const supplies = annual.map(a => a.supply), temps = annual.map(a => a.avgTemp);
-    // 막대는 아래쪽 65% 안, 기온 선은 그 위쪽(높이 74~94%)에 놓이도록 두 축의 범위를 잡음 (서로 겹쳐 글자가 가려지지 않게)
-    // 기온 축은 눈금 없이 값을 점마다 표시하므로, 선의 높낮이는 해 사이의 차이를 보기 쉽게 키운 것
-    const supplyMax = Math.ceil(Math.max(...supplies) / 0.65 / 2000) * 2000;
-    const tempLow = Math.min(...temps), tempSpan = Math.max(Math.max(...temps) - tempLow, 0.5) / 0.2;
-    const tempMin = tempLow - tempSpan * 0.74, tempMax = tempMin + tempSpan;
+    // 공급량 축: 가장 큰 막대보다 약간 위까지만(빈 눈금이 길게 남지 않게), 눈금은 3칸(0, 1/3, 2/3, 끝)이 되도록 3000 단위로 올림
+    const supplyMax = Math.ceil(Math.max(...supplies) * 1.06 / 3000) * 3000;
+    // 기온 축: 실제 변동폭 앞뒤로 0.5°C 여유, 0.5 단위로 맞춤 (기온은 0 에서 시작할 필요가 없어 좁게 잡아야 해마다 차이가 보임)
+    const tempMin = Math.floor((Math.min(...temps) - 0.5) * 2) / 2, tempMax = Math.ceil((Math.max(...temps) + 0.5) * 2) / 2;
+    const monthly = national.monthly || [];
+    // 한 해의 난방도일(18°C 기준 추위의 합: Σ max(0, 18 - 월평균기온) × 그 달 일수). 상관계수 영역과 같은 정의 → 툴팁에서 평균기온만으로는 보이지 않는 겨울 추위를 보여줌
+    const hddOf = y => monthly.filter(m => m.ym.startsWith(`${y}-`))
+      .reduce((sum, m) => sum + Math.max(0, 18 - m.avgTemp) * new Date(Number(y), Number(m.ym.slice(5)), 0).getDate(), 0);   // new Date(연, 월, 0) = 그 달의 마지막 날 = 일수
     // 막대 위에 값 표시 (Chart.js 에 값 표시 기능이 없어서 직접 그림)
     const barValues = {
       id: 'barValues',
@@ -335,7 +339,10 @@
     const axisTitle = text => ({ display: true, text, color: C('--mute'), font: { size: 12 } });
     const tooltipLabel = i => {
       const a = annual[i.dataIndex];
-      if (i.dataset.type === 'line') return `평균기온 ${fmt(a.avgTemp, 1)}°C`;
+      if (i.dataset.type === 'line') {
+        const hdd = hddOf(a.year);
+        return hdd > 0 ? [`평균기온 ${fmt(a.avgTemp, 1)}°C`, `난방도일 ${fmt(hdd)} (겨울이 추울수록 큼)`] : `평균기온 ${fmt(a.avgTemp, 1)}°C`;
+      }
       return `공급량 ${fmt(a.supply, 1)} 백만㎥` + (a.supplyYoy !== null && a.supplyYoy !== undefined ? ` (전년 대비 ${signed(a.supplyYoy)}%)` : '');
     };
 
@@ -354,8 +361,11 @@
         interaction: { mode: 'index', intersect: false },   // 한 해에 올리면 공급량과 기온을 함께 보여줌
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false } },   // 두 줄 라벨이 기울지 않게
-          y: { min: 0, max: supplyMax, ticks: { callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
-          y1: { display: false, min: tempMin, max: tempMax }
+          // stack: 같은 이름이면 세로로 나눠 놓음(stackWeight = 높이 비율). 나중에 쓴 쪽(y1 기온)이 위 칸, 먼저 쓴 쪽(y 공급량)이 아래 칸
+          //   → 연도·전년 대비 글자가 공급량 막대 바로 아래에 붙음
+          y: { stack: 'trend', stackWeight: 2.2, min: 0, max: supplyMax, ticks: { stepSize: supplyMax / 3, callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
+          // 기온 칸의 맨 위·맨 아래 눈금은 글자를 비움: 두 칸이 맞닿는 곳에서 공급량 눈금과 겹쳐 읽기 어려워서
+          y1: { stack: 'trend', stackWeight: 1, min: tempMin, max: tempMax, ticks: { stepSize: 1, callback: v => (v > tempMin && v < tempMax ? `${v}°C` : '') }, title: axisTitle('평균기온 (°C)') }
         },
         plugins: { tooltip: { callbacks: { title: items => `${annual[items[0].dataIndex].year}년`, label: tooltipLabel } } }
       }
@@ -363,7 +373,6 @@
     const yearSub = $('trendSub').textContent;
 
     // 보기 스위치: 연도별(기본) / 월별. 월별 차트는 처음 열 때 그림 (숨겨진 상태에서는 크기를 알 수 없음)
-    const monthly = national.monthly || [];
     $('trendSwitch').hidden = !monthly.length;
     if (!monthly.length) return;
     let monthChart = null;
