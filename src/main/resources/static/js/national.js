@@ -2,7 +2,7 @@
  * national.js — 전국 통계 페이지 (/national)
  *
  * 화면 구성 (위 → 아래)
- *   KPI 4개 → 지역별 공급 현황(트리맵) + 광역경제권별 공급 비중(도넛) → 연도별 추이
+ *   KPI 5개 → 지역별 공급 현황(트리맵) + 광역경제권별 공급 비중(도넛) → 연도별 추이
  *   → 기온 민감도 + 예측 오차(막대) → 상관계수(히트맵) → 데이터 안내
  * 코드 구성: ① 상수  ② 계산·표시 도구  ③ 섹션별 그리기(화면 순서와 같음)  ④ 시작
  *
@@ -28,6 +28,8 @@
   //   가스 공급 업무에서 허용하는 오차를 알게 되면 그 값으로 바꿀 것 (이 상수 하나만 바꾸면 KPI·기준선·경고 설명이 함께 바뀜)
   //   8% 로 두었을 때는 17개 시·도 중 12곳이 걸려(평균 8.4% 근처) 경고로서 구분이 안 됨 → 10% 로 올림
   const MAPE_LIMIT = 10;
+  // 월별 곡선에서 과거 연도(기준 연도·진행 중 연도 제외) 선 색: 흰 배경 대비 3:1 이상(기존 --seq-3 은 2.6:1 이라 흐렸음), 기준 연도의 진한 파랑과는 색약 시뮬레이션에서도 구분됨
+  const PAST_YEAR_LINE = '#5b97d8';
   const METRIC_TABS = [{ id: 'yoy', label: '전년 대비 증감률' }, { id: 'percap', label: '1인당 공급량' }];
 
   // 트리맵 색: 진할수록 큰 값. 글자색은 칸 색에 맞춰 어두운 글씨와 흰 글씨를 나눠 씀
@@ -38,7 +40,10 @@
   const YOY_COLORS = ['#f6d3cd', '#e8998f', '#b94a3f', '#7f1a14'];
   const YOY_WHITE_FROM = 2;   // 이 번호부터 흰 글씨
   // 예측 오차 막대 4단계 (노랑 → 주황 → 빨강 → 짙은 빨강). 밝기가 단계마다 분명히 내려가서 색약에서도 구분됨 (인접 단계 ΔE 21 이상)
-  const MAPE_COLORS = ['#f7c948', '#de7820', '#c43a2b', '#6e1410'];
+  // 막대 색: 지역은 이름이 있는 독립 항목이라 값으로 색을 나누지 않음(길이가 이미 값을 보여줌). 기준선이 있는 차트만 기준에 따라 두 그룹으로 나눔
+  //   기온 민감도: 전국 값보다 높음 = 진한 파랑(--seq-5), 낮음 = 밝은 파랑 (흰 배경 대비 3:1 이상, 두 색은 색약 시뮬레이션에서도 구분됨)
+  //   예측 오차: 기준(MAPE_LIMIT) 초과 = 경고 빨강(--red-500), 이하 = 회색(--ash). 막대마다 값 글자가 있어 회색 대비 2.8:1 은 허용 범위
+  const SENS_LOW_COLOR = '#5b97d8';
   const SEQ_COLORS = ['--seq-1', '--seq-2', '--seq-3', '--seq-5'].map(v => `var(${v})`);
 
   // 도넛 조각 색 (큰 권역부터 차례로). 색약(적록색약 포함)에서도 구분되도록 시뮬레이션으로 고름
@@ -135,16 +140,32 @@
 
   /* ---------- ③ 섹션별 그리기 (화면 순서와 같음) ---------- */
 
-  // KPI 4개(진행 중인 연도가 있으면 올해 누적 포함 5개): 전년 대비, 전분기 대비는 서버가 계산해서 보내줌
+  // 가장 최근 달을 작년 같은 달과 비교 (서버가 보낸 national.monthly 사용: [{ ym: '2026-06', supply, avgTemp }], 오래된 순)
+  //   작년 같은 달이 없으면 증감률은 null (카드는 보여주되 증감 표시만 뺌)
+  const latestMonthOf = monthly => {
+    if (!monthly || !monthly.length) return null;
+    const last = monthly[monthly.length - 1];
+    const [y, m] = last.ym.split('-');
+    const prev = monthly.find(x => x.ym === `${Number(y) - 1}-${m}`);
+    return {
+      year: y, month: Number(m), supply: last.supply,
+      yoy: prev && prev.supply > 0 ? ((last.supply - prev.supply) / prev.supply) * 100 : null
+    };
+  };
+
+  // KPI 5개: 최신 월(작년 같은 달 대비) / 올해 누계(전년 동기 대비) / 기준 연도 연간 / 기온 민감도 / 예측 오차율
+  //   전년 대비, 전분기 대비는 서버가 계산해서 보내줌. 올해 누계는 진행 중인 연도가 없으면 빠짐(그때는 4개)
   const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape, hasSens }) => {
-    const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누적)
+    const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누계)
+    const latest = latestMonthOf(national.monthly);   // 월별 데이터가 없으면 null → 이 카드만 빠짐
     $('kpis').innerHTML = [
-      D.kpi({ label: `전국 연간 가정용 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
-      ytd && D.kpi({ label: `${ytd.year}년 누적 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
-      D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 증가율 (예측 모델 기준)', accent: 'var(--season-winter)' }),
-      // MAPE 는 비율이라 전분기와의 차이는 %p
-      D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: '오차 큰 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
+      // 최신 월 카드에는 기온 차이를 붙이지 않음: 여름처럼 난방이 적은 달은 기온이 낮아도 공급이 줄어 '기온 때문' 으로 오해할 수 있음
+      latest && D.kpi({ label: `${latest.year}년 ${latest.month}월 가정용 공급량`, value: fmt(latest.supply), unit: '백만㎥', delta: latest.yoy, deltaLabel: '작년 같은 달 대비' }),
+      ytd && D.kpi({ label: `${ytd.year}년 누계 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
+      D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
+      D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 평균 월 공급량 대비 증가분 (예측 모델 기준)', accent: 'var(--season-winter)' }),
+      // MAPE 는 비율이라 전분기와의 차이는 %p. 기준(MAPE_LIMIT)을 넘은 지역 수를 같은 카드에 함께 보여줌
+      D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: hasMape ? `전분기 대비 · ${MAPE_LIMIT}% 초과 ${overLimit.length}곳` : '전분기 대비', goodWhen: 'down' })
     ].filter(Boolean).join('');
   };
 
@@ -221,7 +242,7 @@
       render(true);
     });
 
-    $('treemapSub').textContent = `면적 = ${year} 공급량 · 마우스 올리면 수치`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
+    $('treemapSub').textContent = `칸이 클수록 ${year} 공급량 많음 · 클릭하면 상세`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
     render();
     // 창 크기가 바뀌면 칸 크기를 다시 계산 (크기 조절이 0.15초 멈췄을 때 한 번만)
     window.addEventListener('resize', D.debounce(() => { render(); syncTabs(); }, 150));
@@ -293,48 +314,27 @@
     });
   };
 
-  // 연도별 추이 오른쪽 설명 박스: 숫자와 문장을 데이터에서 만듦
-  const trendNotesOf = annual => {
-    // 연도 목록에서 key 값이 가장 큰(또는 작은) 해 하나 고르기. better(새 값, 지금까지 1등 값) 이 true 면 새 해로 교체
-    const pickBy = (better, key) => annual.reduce((a, b) => (better(b[key], a[key]) ? b : a));
-    const peakYear = pickBy((x, y) => x > y, 'supply');
-    const lowYear = pickBy((x, y) => x < y, 'supply');
-    const warmestYear = pickBy((x, y) => x > y, 'avgTemp');
-    const notes = [];
-    if (warmestYear.year === lowYear.year) {
-      notes.push(D.callout('blue', `${warmestYear.year}년: 가장 따뜻하고 공급량은 가장 적음`,
-        `평균기온 ${fmt(warmestYear.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lowYear.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 일치합니다.`));
-    }
-    notes.push(D.callout('purple', '연도별 최대·최소', `가장 많은 해 ${peakYear.year}년 ${fmt(peakYear.supply)}백만㎥, 가장 적은 해 ${lowYear.year}년 ${fmt(lowYear.supply)}백만㎥ (${signed(((lowYear.supply - peakYear.supply) / peakYear.supply) * 100)}%)`));
-    // 기온이 거의 같은데(0.1°C 이내) 공급량이 2% 이상 다른 두 해 → 기온만으로는 설명되지 않는 부분
-    let gap = null;
-    annual.forEach((a, i) => annual.slice(i + 1).forEach(b => {
-      const diff = Math.abs(b.supply - a.supply) / Math.min(a.supply, b.supply) * 100;
-      if (Math.abs(a.avgTemp - b.avgTemp) <= 0.1 && diff >= 2 && (!gap || diff > gap.diff)) gap = { a, b, diff };
-    }));
-    if (gap) {
-      const [lo, hi] = gap.a.supply < gap.b.supply ? [gap.a, gap.b] : [gap.b, gap.a];
-      notes.push(D.callout('blue', '기온 외 요인', `${lo.year}년과 ${hi.year}년은 평균기온이 ${fmt(lo.avgTemp, 1)}°C로 비슷하지만 공급량은 ${hi.year}년이 ${fmt(gap.diff, 1)}% 더 많았습니다. 기온 외에 인구·세대 수나 주택 난방 방식의 변화도 영향을 줄 수 있습니다.`));
-    }
-    notes.push(D.callout('blue', '해석 시 주의', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
-    return notes.join('');
-  };
-
-  // 연도별 추이: 막대 = 연간 공급량(기준 연도는 진하게), 선 = 평균기온. 서버가 12개월이 모두 있는 연도만 보내줌
+  // 연도별 추이: 위 칸 = 평균기온 선(실제 눈금), 아래 칸 = 연간 공급량 막대(기준 연도는 진하게). 한 차트 안에서 세로로 두 칸(stack)으로 나눔
+  //   서버가 12개월이 모두 있는 연도만 보내줌
   const drawTrend = ({ national, year }) => {
     const annual = national.annual || [];
     if (!annual.length) {
       $('trendCard').style.display = 'none';
       return;
     }
-    $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 12개월이 모두 있는 연도만 비교`;
+    $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 12개월이 모두 있는 연도만 비교 (${annual.length}개 연도, 참고용)`;
 
     const supplies = annual.map(a => a.supply), temps = annual.map(a => a.avgTemp);
-    // 막대는 아래쪽 65% 안, 기온 선은 그 위쪽(높이 74~94%)에 놓이도록 두 축의 범위를 잡음 (서로 겹쳐 글자가 가려지지 않게)
-    // 기온 축은 눈금 없이 값을 점마다 표시하므로, 선의 높낮이는 해 사이의 차이를 보기 쉽게 키운 것
-    const supplyMax = Math.ceil(Math.max(...supplies) / 0.65 / 2000) * 2000;
-    const tempLow = Math.min(...temps), tempSpan = Math.max(Math.max(...temps) - tempLow, 0.5) / 0.2;
-    const tempMin = tempLow - tempSpan * 0.74, tempMax = tempMin + tempSpan;
+    // 공급량 축: 가장 큰 막대보다 약 15% 위까지 (막대 위 값 글자가 위 칸의 기온 띠에 닿지 않을 만큼만 여유를 둠. 너무 크면 띠와 막대 사이가 휑해 보임)
+    //   눈금 간격은 가장 큰 막대를 3칸 안에 담는 1000 단위(예: 11,221 → 4,000 간격 → 0, 4,000, 8,000, 12,000)
+    const supplyTop = Math.max(...supplies);
+    const supplyMax = Math.ceil(supplyTop * 1.15 / 1000) * 1000, supplyStep = Math.ceil(supplyTop / 3 / 1000) * 1000;
+    // 기온 축: 실제 변동폭 앞뒤로 0.5°C 여유, 0.5 단위로 맞춤 (기온은 0 에서 시작할 필요가 없어 좁게 잡아야 해마다 차이가 보임)
+    const tempMin = Math.floor((Math.min(...temps) - 0.5) * 2) / 2, tempMax = Math.ceil((Math.max(...temps) + 0.5) * 2) / 2;
+    const monthly = national.monthly || [];
+    // 한 해의 난방도일(18°C 기준 추위의 합: Σ max(0, 18 - 월평균기온) × 그 달 일수). 상관계수 영역과 같은 정의 → 툴팁에서 평균기온만으로는 보이지 않는 겨울 추위를 보여줌
+    const hddOf = y => monthly.filter(m => m.ym.startsWith(`${y}-`))
+      .reduce((sum, m) => sum + Math.max(0, 18 - m.avgTemp) * new Date(Number(y), Number(m.ym.slice(5)), 0).getDate(), 0);   // new Date(연, 월, 0) = 그 달의 마지막 날 = 일수
     // 막대 위에 값 표시 (Chart.js 에 값 표시 기능이 없어서 직접 그림)
     const barValues = {
       id: 'barValues',
@@ -357,10 +357,29 @@
         ctx.restore();
       }
     };
+    // 기온 칸 꾸미기: 연한 배경 띠 + 아래 경계선 + 칸 이름(왼쪽 위). 두 차트가 붙어 보이지 않고 '막대 위의 보조 띠' 로 읽히게 함
+    //   beforeDraw = 눈금선·막대보다 먼저 그려서 배경이 모든 것 아래에 깔림
+    const tempStrip = {
+      id: 'tempStrip',
+      beforeDraw(chart) {
+        const { ctx, chartArea: a, scales: { y1 } } = chart;
+        ctx.save();
+        ctx.fillStyle = C('--surface-soft');
+        ctx.fillRect(a.left, y1.top, a.right - a.left, y1.bottom - y1.top);
+        ctx.strokeStyle = C('--hairline'); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(a.left, y1.bottom + 0.5); ctx.lineTo(a.right, y1.bottom + 0.5); ctx.stroke();
+        ctx.fillStyle = C('--mute'); ctx.font = `600 12px ${C('--font-sans')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillText('평균기온 (°C)', a.left + 8, y1.top + 6);
+        ctx.restore();
+      }
+    };
     const axisTitle = text => ({ display: true, text, color: C('--mute'), font: { size: 12 } });
     const tooltipLabel = i => {
       const a = annual[i.dataIndex];
-      if (i.dataset.type === 'line') return `평균기온 ${fmt(a.avgTemp, 1)}°C`;
+      if (i.dataset.type === 'line') {
+        const hdd = hddOf(a.year);
+        return hdd > 0 ? [`평균기온 ${fmt(a.avgTemp, 1)}°C`, `난방도일 ${fmt(hdd)} (겨울이 추울수록 큼)`] : `평균기온 ${fmt(a.avgTemp, 1)}°C`;
+      }
       return `공급량 ${fmt(a.supply, 1)} 백만㎥` + (a.supplyYoy !== null && a.supplyYoy !== undefined ? ` (전년 대비 ${signed(a.supplyYoy)}%)` : '');
     };
 
@@ -368,28 +387,34 @@
       data: {
         labels: annual.map(a => [`${a.year}년`, a.supplyYoy === null || a.supplyYoy === undefined ? '' : `전년 ${signed(a.supplyYoy)}%`]),   // 두 줄: 연도 / 전년 대비
         datasets: [
-          { type: 'bar', label: '연간 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, maxBarThickness: 56,
+          { type: 'bar', label: '연간 공급량', data: supplies, yAxisID: 'y', borderRadius: 3, barPercentage: 0.55, categoryPercentage: 0.8,   // 막대 폭을 칸 폭의 비율로 정함(고정 px 이면 넓은 화면에서 막대가 가늘어짐)
+           
             backgroundColor: annual.map(a => a.year === year ? C('--seq-5') : C('--seq-3')) },
           { type: 'line', label: '평균기온', data: temps, yAxisID: 'y1', borderColor: C('--yellow-700'), backgroundColor: C('--yellow-700'), borderWidth: 2, pointRadius: 4, tension: 0 }
         ]
       },
-      plugins: [barValues, tempValues],
+      plugins: [tempStrip, barValues, tempValues],
       options: {
         layout: { padding: { top: 8 } },
         interaction: { mode: 'index', intersect: false },   // 한 해에 올리면 공급량과 기온을 함께 보여줌
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false } },   // 두 줄 라벨이 기울지 않게
-          y: { min: 0, max: supplyMax, ticks: { callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
-          y1: { display: false, min: tempMin, max: tempMax }
+          // stack: 같은 이름이면 세로로 나눠 놓음(stackWeight = 높이 비율). 나중에 쓴 쪽(y1 기온)이 위 칸, 먼저 쓴 쪽(y 공급량)이 아래 칸
+          //   → 연도·전년 대비 글자가 공급량 막대 바로 아래에 붙음
+          y: { stack: 'trend', stackWeight: 2.2, min: 0, max: supplyMax,
+            // 눈금은 0, 간격, 간격×2 … 를 직접 지정: stepSize 는 축 최대(13,000)로 나누어떨어지지 않으면 Chart.js 가 간격을 다시 균등하게 나눠 버림(4,333 …).
+            //   축 맨 끝(13,000 같은 어중간한 값)에는 눈금을 만들지 않아 두 칸이 맞닿는 경계에 글자가 걸리지 않음
+            afterBuildTicks: scale => { scale.ticks = Array.from({ length: Math.floor(supplyMax / supplyStep) + 1 }, (_, i) => ({ value: i * supplyStep })); },
+            ticks: { callback: v => fmt(v) }, title: axisTitle('공급량 (백만㎥)') },
+          // 기온 칸의 맨 위·맨 아래 눈금은 글자를 비움: 두 칸이 맞닿는 곳에서 공급량 눈금과 겹쳐 읽기 어려워서
+          y1: { stack: 'trend', stackWeight: 1, min: tempMin, max: tempMax, ticks: { stepSize: 1, callback: v => (v > tempMin && v < tempMax ? `${v}°C` : '') } }
         },
         plugins: { tooltip: { callbacks: { title: items => `${annual[items[0].dataIndex].year}년`, label: tooltipLabel } } }
       }
     });
-    const yearNotes = trendNotesOf(annual), yearSub = $('trendSub').textContent;
-    $('trendNotes').innerHTML = yearNotes;
+    const yearSub = $('trendSub').textContent;
 
     // 보기 스위치: 연도별(기본) / 월별. 월별 차트는 처음 열 때 그림 (숨겨진 상태에서는 크기를 알 수 없음)
-    const monthly = national.monthly || [];
     $('trendSwitch').hidden = !monthly.length;
     if (!monthly.length) return;
     let monthChart = null;
@@ -398,8 +423,7 @@
       $('trendYearView').hidden = isMonth;
       $('trendMonthView').hidden = !isMonth;
       $('trendTitle').textContent = isMonth ? '월별 공급량 곡선' : '연도별 공급량과 평균기온';
-      $('trendSub').textContent = isMonth ? `${monthly[0].ym.slice(0, 4)}~${monthly[monthly.length - 1].ym.slice(0, 4)}년 · 같은 달끼리 연도 비교` : yearSub;
-      $('trendNotes').innerHTML = isMonth ? monthlyNotesOf(national, year) : yearNotes;
+      $('trendSub').textContent = isMonth ? `${monthly[0].ym.slice(0, 4)}~${monthly[monthly.length - 1].ym.slice(0, 4)}년 · 같은 달끼리 연도 비교${national.ytd ? ` · ${national.ytd.year}년은 ${national.ytd.month}월까지` : ''}` : yearSub;
       if (isMonth && !monthChart) monthChart = drawMonthChart(monthly, year, national.ytd);
     });
   };
@@ -417,7 +441,7 @@
     });
     const years = Object.keys(byYear).sort();
     const styleOf = y => y === (ytd && ytd.year) ? { color: C('--yellow-700'), width: 3, radius: 3 }
-      : y === String(year) ? { color: C('--seq-5'), width: 3, radius: 0 } : { color: C('--seq-3'), width: 1.5, radius: 0 };
+      : y === String(year) ? { color: C('--seq-5'), width: 3, radius: 0 } : { color: PAST_YEAR_LINE, width: 2, radius: 0 };
     const nameOf = y => `${y}년` + (ytd && y === ytd.year ? `(1~${ytd.month}월)` : '');
 
     const chart = new Chart($('trendMonthChart'), {
@@ -444,11 +468,12 @@
     const nowYear = ytd ? ytd.year : String(year), prevYear = String(Number(nowYear) - 1);
     const pair = years.includes(nowYear) && years.includes(prevYear) ? [prevYear, nowYear] : null;
     const legend = $('trendMonthLegend');
+    // 위: 빠른 보기(올해 vs 작년 / 전체), 아래: 연도 직접 선택. 역할이 달라서 라벨을 붙여 두 줄로 나눔
+    const quickBtn = (key, pressed, text) => `<button type="button" class="trend-chip trend-chip--quick" data-quick="${key}" aria-pressed="${pressed}">${text}</button>`;
     legend.innerHTML =
-      `<div class="trend-chips">${years.map(y => `<button type="button" class="trend-chip" data-y="${y}" aria-pressed="true"><i style="background:${styleOf(y).color}"></i>${nameOf(y)}</button>`).join('')}</div>` +
-      `<div class="trend-quick">${pair ? `<button type="button" class="trend-chip trend-chip--quick" data-quick="pair" aria-pressed="false">${prevYear} vs ${nowYear}</button>` : ''}` +
-      '<button type="button" class="trend-chip trend-chip--quick" data-quick="all" aria-pressed="true">전체</button></div>' +
-      '<div class="trend-hint">연도를 눌러 선을 켜고 끌 수 있습니다 · 굵은 선 = 기준 연도, 노랑 = 진행 중</div>';
+      `<div class="trend-group"><span class="trend-group-label">빠른 보기</span><div class="trend-quick">${pair ? quickBtn('pair', true, `${prevYear} vs ${nowYear}`) : ''}${quickBtn('all', !pair, '전체')}</div></div>` +
+      `<div class="trend-group"><span class="trend-group-label">연도 선택</span><div class="trend-chips">${years.map(y => `<button type="button" class="trend-chip" data-y="${y}" aria-pressed="true"><i style="background:${styleOf(y).color}"></i>${nameOf(y)}</button>`).join('')}</div></div>` +
+      '<div class="trend-hint">연도 버튼을 누르면 그 선을 켜고 끄고, 올려 두면 그 선이 강조됩니다 · 굵은 선 = 기준 연도, 노랑 = 진행 중</div>';
 
     let shown = new Set(years);
     const sync = () => {
@@ -483,36 +508,9 @@
     });
     legend.querySelector('[data-quick="all"]').onclick = () => { shown = new Set(years); sync(); };
     if (pair) legend.querySelector('[data-quick="pair"]').onclick = () => { shown = new Set(pair); sync(); };
+    if (pair) { shown = new Set(pair); sync(); }   // 처음 보기: 올해 vs 작년 (6개 선이 겹치면 계절 모양만 보이고 올해와 작년의 차이가 안 보임)
     return chart;
   };
-
-  // 월별 보기 오른쪽 설명 박스: 기준 연도의 계절 곡선, 올해 누적, 주의 문구
-  const monthlyNotesOf = ({ monthly, ytd }, year) => {
-    const notes = [];
-    const base = monthly.filter(m => m.ym.startsWith(`${year}-`));
-    if (base.length === 12) {
-      const peak = base.reduce((a, b) => (b.supply > a.supply ? b : a)), low = base.reduce((a, b) => (b.supply < a.supply ? b : a));
-      notes.push(D.callout('blue', '계절 곡선',
-        `${year}년 공급량은 ${Number(peak.ym.slice(5))}월 ${fmt(peak.supply)}백만㎥로 가장 많고 ${Number(low.ym.slice(5))}월 ${fmt(low.supply)}백만㎥로 가장 적어, 겨울 정점이 여름 최저의 약 ${fmt(peak.supply / low.supply, 1)}배입니다.`));
-    }
-    if (ytd) {
-      notes.push(D.callout('purple', `${ytd.year}년 1~${ytd.month}월 누적`,
-        `${fmt(ytd.supply)}백만㎥로 전년 같은 기간보다 ${pctText(ytd.supplyYoy)}입니다. 같은 기간 평균기온은 ${signed(ytd.tempDiff)}°C 차이입니다.`));
-      notes.push(D.callout('blue', '해석 시 주의',
-        `${ytd.year}년은 ${ytd.month}월까지의 값이라 연간 합계로 비교하지 않고, 같은 달끼리만 비교합니다.`));
-    }
-    return notes.join('');
-  };
-
-  // 값이 큰 순으로 정렬된 지역 목록을 4구간(4분위)으로 나눔 → 지역 id 별 0(낮음)~3(높음). 극단 값 하나에 색이 쏠리지 않게 값이 아닌 순위로 나눔
-  const bandsOf = rows => {
-    const bands = {};
-    rows.forEach((r, i) => { bands[r.id] = 3 - Math.min(3, Math.floor((i * 4) / rows.length)); });
-    return bands;
-  };
-  // 색 범례: 낮음 → 높음 (4구간)
-  const bandLegend = (colors, lowText, highText) =>
-    `${lowText}${colors.map(c => `<i style="background:${c}"></i>`).join('')}${highText}<span class="tm-legend-note">4분위 (순위 기준)</span>`;
 
   // 지역 연동: 트리맵 칸이나 막대에 올리면 같은 지역이 모든 차트에서 함께 강조되고 나머지는 흐려짐 (id = 지역 번호, 벗어나면 null)
   //   bars = [{ chart, items }]  items = 그 차트의 막대 목록 [{ id, color }]
@@ -549,42 +547,37 @@
 
   // 기온 민감도 + 예측 오차 (가로 막대): 막대를 클릭하면 지역 상세로 이동
   const drawBars = ({ bySensitivity, byMape, overLimit, avgSens, hasMape, hasSens }) => {
-    // 민감도: 높을수록 진한 파랑 (4구간). 전국 값은 기준선으로 따로 표시. 값은 FastAPI 예측 모델 기반 (지역 상세 페이지와 같은 값)
+    // 민감도: 전국 값(기준선)보다 높으면 진한 파랑, 낮으면 밝은 파랑. 값은 FastAPI 예측 모델 기반
     let setLinked = () => {};   // 두 차트를 다 만든 뒤 아래에서 연결
     let sensChart = null, sensItems = [];
     if (hasSens) {
-      const sensColors = ['--seq-2', '--seq-3', '--seq-4', '--seq-5'].map(v => C(v));
-      const sensBand = bandsOf(bySensitivity);
-      sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: sensColors[sensBand[r.id]], detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
+      const sensHigh = C('--seq-5');
+      sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? sensHigh : SENS_LOW_COLOR, detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
       sensChart = D.hbar($('sensChart'), sensItems,
-        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '공급량 증가율 (%/°C)', barThickness: 16 });
-      $('sensLegend').innerHTML = bandLegend(sensColors, '민감도 낮음', '높음');
-      $('sensNote').innerHTML = D.callout('blue', '계산 방식', '예측 모델의 기온 계수를 1인당 평균 공급량으로 나눈 값입니다. 지역 상세 페이지의 기온 민감도와 같은 값입니다.');
+        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 월 공급량 대비 증가분 (%/°C)', barThickness: 16 });
+      $('sensLegend').innerHTML = `<i style="background:${sensHigh}"></i>전국보다 높음<i style="background:${SENS_LOW_COLOR}"></i>전국보다 낮음`;
+      $('sensNote').innerHTML = D.callout('blue', '계산 방식', '이번 달과 지난달 기온이 모두 1°C 낮을 때 늘어나는 공급량을, 연평균 월 공급량으로 나눈 추정값입니다. 겨울 달만 기준으로 하면 더 작게 나옵니다.');
     } else {
       $('sensLegend').innerHTML = '';
       $('sensNote').innerHTML = D.callout('purple', '기온 민감도를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
     }
 
-    // 예측 오차: 기준선을 넘으면 빨강. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
+    // 예측 오차: 기준(MAPE_LIMIT)을 넘으면 빨강, 나머지는 회색. 가로축 최대값은 가장 큰 MAPE 를 10 단위로 올림 (실제 값이 14% 를 넘어도 막대가 잘리지 않게, 최소 14)
     const mapeAxisMax = Math.max(14, Math.ceil(Math.max(...byMape.map(r => r.mape || 0)) / 10) * 10);
-    // 오차: 클수록 노랑 → 빨강 (4구간). 예측 오차를 못 받아오면 순위를 알 수 없어 한 색으로 둠
-    const mapeColors = MAPE_COLORS;
-    const mapeBand = bandsOf(byMape);
-    const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? mapeColors[mapeBand[r.id]] : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
+    // 예측 오차를 못 받아오면 기준을 알 수 없어 한 색(--stone)으로 둠
+    const mapeOver = C('--red-500'), mapeOk = C('--ash');
+    const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? (r.mape > MAPE_LIMIT ? mapeOver : mapeOk) : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
     const accChart = D.hbar($('accChart'), accItems,
-      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: 'MAPE (%)', barThickness: 16 });
+      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 오차율 (%)', barThickness: 16 });
     setLinked = linkRegions([sensChart && { chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }].filter(Boolean));
-    $('accLegend').innerHTML = hasMape ? bandLegend(mapeColors, '오차 작음', '큼') : '';
-    $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>${overLimit.length}곳 경고` : '';
+    $('accLegend').innerHTML = hasMape ? `<i style="background:${mapeOver}"></i>${MAPE_LIMIT}% 초과 (오차 큰 지역)<i style="background:${mapeOk}"></i>${MAPE_LIMIT}% 이하` : '';
+    $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>오차 큰 지역 ${overLimit.length}곳` : '';
     $('badBadge').hidden = !hasMape;
-    // 원인은 지역마다 다를 수 있어서 단정하는 문구는 넣지 않고, 어떻게 구한 값인지만 설명. 지역 이름은 데이터에서 뽑음
-    if (!hasMape) {
-      $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
-    } else if (overLimit.length) {
-      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다. (일반적으로 MAPE 10% 이하를 '매우 정확'으로 봅니다)`);
-    } else {
-      $('accCallout').innerHTML = D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
-    }
+    // 설명 박스는 어떻게 구한 값인지와 한계만 알림 (민감도 카드의 '계산 방식' 박스와 같은 톤).
+    //   오차 큰 지역의 이름·개수는 배지, 범례, 빨간 막대, KPI 카드가 이미 보여줘서 박스에서는 반복하지 않음. 원인은 지역마다 다를 수 있어 단정하지 않음
+    $('accCallout').innerHTML = hasMape
+      ? D.callout('blue', '계산 방식', `실제 기온을 넣고 최근 12개월 공급량을 다시 맞혀 본 평균 오차율입니다. ${MAPE_LIMIT}% 이하는 일반적으로 '매우 정확'한 수준입니다. 실제 예측은 미래 기온을 몰라 평년 기온을 쓰므로 이보다 오차가 클 수 있습니다.`)
+      : D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
   };
 
   // 공급량과 함께 보여줄 요인 (이름, 보충 설명). 난방도일은 기온에서 계산한 값이라 같이 움직이는 게 당연함

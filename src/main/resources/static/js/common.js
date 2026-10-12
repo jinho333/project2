@@ -668,6 +668,7 @@
   //   칸 크기에 따라 글자가 달라짐
   //     큰 칸 = 이름 + '값 · note'   /   좁은 칸 = 이름 + note (이름이 들어가는 칸은 note 도 항상 같이 보임). showValue:false 면 모든 칸이 이름 + note
   //     이름·note 글자: 큰 칸 이름 15px, 폭 60px 이상 칸은 13px, 그보다 좁은 칸은 12px
+  //     안쪽 여백: 폭 72 초과·높이 60 초과 칸은 기본(8px 10px), 그보다 낮은 칸은 위아래 3px(글자 두 줄이 들어가는 높이 44 초과) 또는 2px, 좁은 칸은 좌우 4px (글자가 칸 가장자리에 붙지 않게)
   //     아주 작은 칸 = 글자 없음(말풍선으로만 확인). 어떤 칸이 그런지는 부르는 쪽이 칸 안에 .tm-inner b 가 없는 것으로 찾을 수 있음
   function renderTreemap(el, data, { unit = '', onSelect, showValue = true } = {}) {
     const w = el.clientWidth, h = el.clientHeight;                  // 트리맵 영역의 가로·세로(픽셀)
@@ -683,7 +684,7 @@
       const note = r.note !== undefined ? r.note : `${fmt((r.value / total) * 100, 1)}%`;
       // left/top/width/height 로 칸의 위치와 크기를 지정. 칸이 충분히 클 때만 이름·값 글자를 넣음
       return `<div class="tm-cell" data-id="${r.id}" data-i="${i}" aria-label="${r.label} ${fmt(r.value)}${unit}"${onSelect ? ' tabindex="0" role="button"' : ''} style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">
-        <div class="tm-inner" style="background:${r.color || seq(t)};color:${r.ink || seqInk(t)};${r.w > 72 && r.h > 36 ? '' : 'padding:2px 4px'}">
+        <div class="tm-inner" style="background:${r.color || seq(t)};color:${r.ink || seqInk(t)};${r.w > 72 && r.h > 60 ? '' : `padding:${r.h > 44 ? 3 : 2}px ${r.w > 72 ? 10 : 4}px`}">
           ${r.w > 44 && r.h > 22 ? `<b style="font-size:${big ? 15 : r.w >= 60 ? 13 : 12}px">${r.label}</b>` : ''}
           ${r.w > 44 && r.h > 44 ? `<span${r.w >= 60 ? ' style="font-size:13px"' : ''}>${showValue && r.w > 96 ? `${fmt(r.value)}${unit} · ${note}` : note}</span>` : ''}
         </div></div>`;

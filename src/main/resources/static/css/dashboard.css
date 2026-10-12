@@ -61,7 +61,7 @@
 .tm-cell{position:absolute;padding:2px;cursor:pointer}
 .tm-inner{width:100%;height:100%;border-radius:4px;padding:8px 10px;overflow:hidden;display:flex;flex-direction:column;gap:2px}
 .tm-inner b{font-weight:700;line-height:1.25;white-space:nowrap}
-.tm-inner span{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tm-inner span{font-size:12px;font-weight:500;line-height:1.35;font-variant-numeric:tabular-nums;white-space:nowrap}   /* 줄 높이를 줄여 높이 50px 안팎의 칸에서도 두 줄이 넘치지 않게 */
 .tm-cell:hover .tm-inner,.tm-cell.is-linked .tm-inner,.tm-cell:focus-visible .tm-inner{outline:2px solid var(--ink);outline-offset:-2px}
 .tm-cell:focus{outline:none}
 /* 데이터를 받아오는 동안 KPI 자리에 보이는 빈 카드 */
@@ -84,14 +84,19 @@
 .tm-tip b{display:block;font-size:13px;margin-bottom:2px}
 /* 트리맵 색 범례 */
 /* 월별 곡선 범례: 연도 칩을 눌러 선을 켜고 끔 + 빠른 선택 (올해 vs 작년 / 전체) */
-.trend-legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin-top:12px}
-.trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:6px}
-.trend-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:12px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
+.trend-legend{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+/* 빠른 보기 / 연도 선택: 라벨 + 버튼들 한 줄씩 (버튼이 많아 줄이 바뀌어도 라벨은 첫 줄 옆에 그대로) */
+.trend-group{display:flex;align-items:flex-start;gap:10px}
+.trend-group-label{flex:none;width:56px;padding-top:7px;font-size:12px;color:var(--mute)}
+.trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:8px}
+/* 버튼 크기: 페이지의 다른 토글(높이 약 35px, 글자 14px)과 비슷하게 (기존 높이 26px·글자 12px 은 월별 보기의 주 조작 요소로는 작았음) */
+.trend-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:13px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
 .trend-chip i{display:inline-block;width:14px;height:4px;border-radius:2px}
 .trend-chip:hover{background:var(--surface-soft)}
 .trend-chip[data-y][aria-pressed="false"]{opacity:.5}
 .trend-chip[data-y][aria-pressed="false"] i{background:var(--ash)!important}
-.trend-chip--quick[aria-pressed="true"]{border-color:var(--ink);font-weight:700}
+/* 빠른 보기는 선택되면 진하게 채워 연도 버튼(테두리만 있음)과 구분 */
+.trend-chip--quick[aria-pressed="true"],.trend-chip--quick[aria-pressed="true"]:hover{background:var(--ink);border-color:var(--ink);color:var(--surface-card);font-weight:700}
 .trend-hint{flex-basis:100%;font-size:12px;color:var(--mute)}
 @media (prefers-reduced-motion:reduce){.trend-chip{transition:none}}
 .tm-legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--mute)}
