@@ -226,7 +226,7 @@
       render(true);
     });
 
-    $('treemapSub').textContent = `면적 = ${year} 공급량 · 마우스 올리면 수치`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
+    $('treemapSub').textContent = `칸이 클수록 ${year} 공급량 많음 · 클릭하면 상세`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
     render();
     // 창 크기가 바뀌면 칸 크기를 다시 계산 (크기 조절이 0.15초 멈췄을 때 한 번만)
     window.addEventListener('resize', D.debounce(() => { render(); syncTabs(); }, 150));
