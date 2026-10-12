@@ -255,9 +255,11 @@
       },
       options: {
         scales: {
-          // autoSkip: false → 라벨 12개 전부 표시, maxRotation: 0 → 글자 기울이지 않음
-          x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0 } },
-          y: { beginAtZero: true, ticks: { callback: v => fmt(v, 1) } }
+          // autoSkip: false → 라벨 12개 전부 표시
+          // maxRotation: 45 → 라벨이 좁은 가로폭에서 겹치지 않도록 45° 기울임
+          x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 } },
+          // y축 눈금은 정수(500.0 → 500) — 월평균이라 백만㎥ 단위 큼
+          y: { beginAtZero: true, ticks: { callback: v => fmt(v) } }
         },
         plugins: {
           tooltip: {
