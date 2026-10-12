@@ -68,9 +68,9 @@
                             <h3 class="card-title" id="trendTitle">연도별 공급량과 평균기온</h3>
                             <div class="card-sub" id="trendSub">12개월이 모두 있는 연도만 비교</div>
                         </div>
+                        <!-- 선택지(연도별/월별)만 봐도 뜻이 분명하고 카드 제목도 함께 바뀌므로 눈에 보이는 "보기" 라벨은 두지 않음 (스크린 리더용 이름만 aria-label 로) -->
                         <div class="metric-switch" id="trendSwitch">
-                            <span class="metric-switch-label">보기</span>
-                            <div id="trendTabs" class="tabs tabs--slide"></div>
+                            <div id="trendTabs" class="tabs tabs--slide" role="group" aria-label="보기 전환"></div>
                         </div>
                     </div>
                     <div class="card-body">
