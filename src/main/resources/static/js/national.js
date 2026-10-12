@@ -24,7 +24,10 @@
 
   /* ---------- ① 상수 ---------- */
 
-  const MAPE_LIMIT = 8;   // MAPE 경고 기준(%)
+  // MAPE 경고 기준(%): 예측 정확도를 해석하는 일반 관례(Lewis, 1982)에서 MAPE 10% 이하를 '매우 정확'으로 봄.
+  //   가스 공급 업무에서 허용하는 오차를 알게 되면 그 값으로 바꿀 것 (이 상수 하나만 바꾸면 KPI·기준선·경고 설명이 함께 바뀜)
+  //   8% 로 두었을 때는 17개 시·도 중 12곳이 걸려(평균 8.4% 근처) 경고로서 구분이 안 됨 → 10% 로 올림
+  const MAPE_LIMIT = 10;
   const METRIC_TABS = [{ id: 'yoy', label: '전년 대비 증감률' }, { id: 'percap', label: '1인당 공급량' }];
 
   // 트리맵 색: 진할수록 큰 값. 글자색은 칸 색에 맞춰 어두운 글씨와 흰 글씨를 나눠 씀
@@ -136,7 +139,7 @@
   const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape, hasSens }) => {
     const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누적)
     $('kpis').innerHTML = [
-      D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
+      D.kpi({ label: `전국 연간 가정용 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
       ytd && D.kpi({ label: `${ytd.year}년 누적 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
       D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 증가율 (예측 모델 기준)', accent: 'var(--season-winter)' }),
       // MAPE 는 비율이라 전분기와의 차이는 %p
@@ -205,7 +208,7 @@
 
     const render = animate => {
       const data = regions.map(tileOf);
-      D.renderTreemap($('treemap'), data, { unit: '', onSelect: goToRegion });
+      D.renderTreemap($('treemap'), data, { unit: '', onSelect: goToRegion, showValue: false });   // 칸에는 이름 + 증감률(또는 1인당)만: 공급량은 면적이 보여주고 정확한 값은 마우스를 올리면 나옴
       if (animate && !reduceMotion) fadeFromPrevious(data);
       else data.forEach(d => { lastPaint[d.id] = d; });
       $('treemapLegend').innerHTML = legendOf();
@@ -218,7 +221,7 @@
       render(true);
     });
 
-    $('treemapSub').textContent = `면적 = ${year} 공급량(백만㎥) · 클릭하면 상세 보기`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
+    $('treemapSub').textContent = `면적 = ${year} 공급량 · 마우스 올리면 수치`;   // 색 기준은 토글과 범례가 알려줌 (토글 옆에 한 줄로 들어가게 짧게)
     render();
     // 창 크기가 바뀌면 칸 크기를 다시 계산 (크기 조절이 0.15초 멈췄을 때 한 번만)
     window.addEventListener('resize', D.debounce(() => { render(); syncTabs(); }, 150));
@@ -311,7 +314,7 @@
     }));
     if (gap) {
       const [lo, hi] = gap.a.supply < gap.b.supply ? [gap.a, gap.b] : [gap.b, gap.a];
-      notes.push(D.callout('blue', '기온 외 요인', `${lo.year}년과 ${hi.year}년은 평균기온이 ${fmt(lo.avgTemp, 1)}°C로 비슷하지만 공급량은 ${hi.year}년이 ${fmt(gap.diff, 1)}% 더 많았습니다. 기온 외에 인구·세대 수나 산업용 수요도 영향을 줄 수 있습니다.`));
+      notes.push(D.callout('blue', '기온 외 요인', `${lo.year}년과 ${hi.year}년은 평균기온이 ${fmt(lo.avgTemp, 1)}°C로 비슷하지만 공급량은 ${hi.year}년이 ${fmt(gap.diff, 1)}% 더 많았습니다. 기온 외에 인구·세대 수나 주택 난방 방식의 변화도 영향을 줄 수 있습니다.`));
     }
     notes.push(D.callout('blue', '해석 시 주의', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
     return notes.join('');
@@ -578,7 +581,7 @@
     if (!hasMape) {
       $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
     } else if (overLimit.length) {
-      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다.`);
+      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다. (일반적으로 MAPE 10% 이하를 '매우 정확'으로 봅니다)`);
     } else {
       $('accCallout').innerHTML = D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
     }
@@ -675,7 +678,7 @@
     const [endYear, endMonth] = (national.corrPeriod || '').split(' ~ ').pop().split('-').map(Number);
     const partial = endMonth && endMonth < 12 ? ` (${endYear}년은 ${endMonth}월까지라 연간 비교에서는 제외하고 올해 누적·월별 곡선에만 포함)` : '';
     const mapeNote = hasMape ? '예측 오차(MAPE)는 최근 12개월을 예측 모델로 다시 예측해 구한 값입니다.' : '예측 오차(MAPE)는 예측 서버가 꺼져 있어 불러오지 못했습니다.';
-    $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준${partial}, 연도별 추이는 12개월이 모두 있는 연도만 표시 · ${mapeNote}`;
+    $('dataNote').textContent = `데이터 기간 ${period || '-'} · 연간 지표는 12개월이 모두 있는 ${year}년 기준${partial}, 연도별 추이는 12개월이 모두 있는 연도만 표시 · ${mapeNote} · 공급량은 도시가스 가정용(취사·난방) 공급량이며 산업용 등은 포함하지 않음 · 출처: 한국도시가스협회 도시가스사업통계월보(공급량·가구수), 기상청(월 평균기온)`;
   };
 
   // 한 섹션을 그리다 오류가 나도 나머지는 그리도록 격리 (오류는 콘솔에 남기고, 그 섹션은 비어 있는 채로 둠)
