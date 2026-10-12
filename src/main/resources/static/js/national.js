@@ -24,7 +24,10 @@
 
   /* ---------- ① 상수 ---------- */
 
-  const MAPE_LIMIT = 8;   // MAPE 경고 기준(%)
+  // MAPE 경고 기준(%): 예측 정확도를 해석하는 일반 관례(Lewis, 1982)에서 MAPE 10% 이하를 '매우 정확'으로 봄.
+  //   가스 공급 업무에서 허용하는 오차를 알게 되면 그 값으로 바꿀 것 (이 상수 하나만 바꾸면 KPI·기준선·경고 설명이 함께 바뀜)
+  //   8% 로 두었을 때는 17개 시·도 중 12곳이 걸려(평균 8.4% 근처) 경고로서 구분이 안 됨 → 10% 로 올림
+  const MAPE_LIMIT = 10;
   const METRIC_TABS = [{ id: 'yoy', label: '전년 대비 증감률' }, { id: 'percap', label: '1인당 공급량' }];
 
   // 트리맵 색: 진할수록 큰 값. 글자색은 칸 색에 맞춰 어두운 글씨와 흰 글씨를 나눠 씀
@@ -578,7 +581,7 @@
     if (!hasMape) {
       $('accCallout').innerHTML = D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
     } else if (overLimit.length) {
-      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다.`);
+      $('accCallout').innerHTML = D.callout('red', '경고 지역', `${overLimit.map(r => esc(r.name)).join('·')} — 최근 12개월을 모델로 다시 예측해 본 오차가 ${MAPE_LIMIT}%를 넘는 지역입니다. (일반적으로 MAPE 10% 이하를 '매우 정확'으로 봅니다)`);
     } else {
       $('accCallout').innerHTML = D.callout('green', '경고 지역 없음', `모든 지역의 MAPE 가 ${MAPE_LIMIT}% 이하입니다.`);
     }
