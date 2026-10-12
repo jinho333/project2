@@ -293,33 +293,6 @@
     });
   };
 
-  // 연도별 추이 오른쪽 설명 박스: 숫자와 문장을 데이터에서 만듦
-  const trendNotesOf = annual => {
-    // 연도 목록에서 key 값이 가장 큰(또는 작은) 해 하나 고르기. better(새 값, 지금까지 1등 값) 이 true 면 새 해로 교체
-    const pickBy = (better, key) => annual.reduce((a, b) => (better(b[key], a[key]) ? b : a));
-    const peakYear = pickBy((x, y) => x > y, 'supply');
-    const lowYear = pickBy((x, y) => x < y, 'supply');
-    const warmestYear = pickBy((x, y) => x > y, 'avgTemp');
-    const notes = [];
-    if (warmestYear.year === lowYear.year) {
-      notes.push(D.callout('blue', `${warmestYear.year}년: 가장 따뜻하고 공급량은 가장 적음`,
-        `평균기온 ${fmt(warmestYear.avgTemp, 1)}°C로 가장 높았고 공급량은 ${fmt(lowYear.supply)}백만㎥로 가장 적었습니다. 기온이 높은 해에 난방 수요가 줄어드는 것과 일치합니다.`));
-    }
-    notes.push(D.callout('purple', '연도별 최대·최소', `가장 많은 해 ${peakYear.year}년 ${fmt(peakYear.supply)}백만㎥, 가장 적은 해 ${lowYear.year}년 ${fmt(lowYear.supply)}백만㎥ (${signed(((lowYear.supply - peakYear.supply) / peakYear.supply) * 100)}%)`));
-    // 기온이 거의 같은데(0.1°C 이내) 공급량이 2% 이상 다른 두 해 → 기온만으로는 설명되지 않는 부분
-    let gap = null;
-    annual.forEach((a, i) => annual.slice(i + 1).forEach(b => {
-      const diff = Math.abs(b.supply - a.supply) / Math.min(a.supply, b.supply) * 100;
-      if (Math.abs(a.avgTemp - b.avgTemp) <= 0.1 && diff >= 2 && (!gap || diff > gap.diff)) gap = { a, b, diff };
-    }));
-    if (gap) {
-      const [lo, hi] = gap.a.supply < gap.b.supply ? [gap.a, gap.b] : [gap.b, gap.a];
-      notes.push(D.callout('blue', '기온 외 요인', `${lo.year}년과 ${hi.year}년은 평균기온이 ${fmt(lo.avgTemp, 1)}°C로 비슷하지만 공급량은 ${hi.year}년이 ${fmt(gap.diff, 1)}% 더 많았습니다. 기온 외에 인구·세대 수나 주택 난방 방식의 변화도 영향을 줄 수 있습니다.`));
-    }
-    notes.push(D.callout('blue', '해석 시 주의', `${annual.length}개 연도만 비교한 것이라 경향을 보는 참고용입니다.`));
-    return notes.join('');
-  };
-
   // 연도별 추이: 막대 = 연간 공급량(기준 연도는 진하게), 선 = 평균기온. 서버가 12개월이 모두 있는 연도만 보내줌
   const drawTrend = ({ national, year }) => {
     const annual = national.annual || [];
@@ -327,7 +300,7 @@
       $('trendCard').style.display = 'none';
       return;
     }
-    $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 12개월이 모두 있는 연도만 비교`;
+    $('trendSub').textContent = `${annual[0].year}~${annual[annual.length - 1].year}년 · 12개월이 모두 있는 연도만 비교 (${annual.length}개 연도, 참고용)`;
 
     const supplies = annual.map(a => a.supply), temps = annual.map(a => a.avgTemp);
     // 막대는 아래쪽 65% 안, 기온 선은 그 위쪽(높이 74~94%)에 놓이도록 두 축의 범위를 잡음 (서로 겹쳐 글자가 가려지지 않게)
@@ -385,8 +358,7 @@
         plugins: { tooltip: { callbacks: { title: items => `${annual[items[0].dataIndex].year}년`, label: tooltipLabel } } }
       }
     });
-    const yearNotes = trendNotesOf(annual), yearSub = $('trendSub').textContent;
-    $('trendNotes').innerHTML = yearNotes;
+    const yearSub = $('trendSub').textContent;
 
     // 보기 스위치: 연도별(기본) / 월별. 월별 차트는 처음 열 때 그림 (숨겨진 상태에서는 크기를 알 수 없음)
     const monthly = national.monthly || [];
@@ -398,8 +370,7 @@
       $('trendYearView').hidden = isMonth;
       $('trendMonthView').hidden = !isMonth;
       $('trendTitle').textContent = isMonth ? '월별 공급량 곡선' : '연도별 공급량과 평균기온';
-      $('trendSub').textContent = isMonth ? `${monthly[0].ym.slice(0, 4)}~${monthly[monthly.length - 1].ym.slice(0, 4)}년 · 같은 달끼리 연도 비교` : yearSub;
-      $('trendNotes').innerHTML = isMonth ? monthlyNotesOf(national, year) : yearNotes;
+      $('trendSub').textContent = isMonth ? `${monthly[0].ym.slice(0, 4)}~${monthly[monthly.length - 1].ym.slice(0, 4)}년 · 같은 달끼리 연도 비교${national.ytd ? ` · ${national.ytd.year}년은 ${national.ytd.month}월까지` : ''}` : yearSub;
       if (isMonth && !monthChart) monthChart = drawMonthChart(monthly, year, national.ytd);
     });
   };
@@ -486,24 +457,6 @@
     if (pair) legend.querySelector('[data-quick="pair"]').onclick = () => { shown = new Set(pair); sync(); };
     if (pair) { shown = new Set(pair); sync(); }   // 처음 보기: 올해 vs 작년 (6개 선이 겹치면 계절 모양만 보이고 올해와 작년의 차이가 안 보임)
     return chart;
-  };
-
-  // 월별 보기 오른쪽 설명 박스: 기준 연도의 계절 곡선, 올해 누적, 주의 문구
-  const monthlyNotesOf = ({ monthly, ytd }, year) => {
-    const notes = [];
-    const base = monthly.filter(m => m.ym.startsWith(`${year}-`));
-    if (base.length === 12) {
-      const peak = base.reduce((a, b) => (b.supply > a.supply ? b : a)), low = base.reduce((a, b) => (b.supply < a.supply ? b : a));
-      notes.push(D.callout('blue', '계절 곡선',
-        `${year}년 공급량은 ${Number(peak.ym.slice(5))}월 ${fmt(peak.supply)}백만㎥로 가장 많고 ${Number(low.ym.slice(5))}월 ${fmt(low.supply)}백만㎥로 가장 적어, 겨울 정점이 여름 최저의 약 ${fmt(peak.supply / low.supply, 1)}배입니다.`));
-    }
-    if (ytd) {
-      notes.push(D.callout('purple', `${ytd.year}년 1~${ytd.month}월 누적`,
-        `${fmt(ytd.supply)}백만㎥로 전년 같은 기간보다 ${pctText(ytd.supplyYoy)}입니다. 같은 기간 평균기온은 ${signed(ytd.tempDiff)}°C 차이입니다.`));
-      notes.push(D.callout('blue', '해석 시 주의',
-        `${ytd.year}년은 ${ytd.month}월까지의 값이라 연간 합계로 비교하지 않고, 같은 달끼리만 비교합니다.`));
-    }
-    return notes.join('');
   };
 
   // 값이 큰 순으로 정렬된 지역 목록을 4구간(4분위)으로 나눔 → 지역 id 별 0(낮음)~3(높음). 극단 값 하나에 색이 쏠리지 않게 값이 아닌 순위로 나눔
