@@ -140,16 +140,32 @@
 
   /* ---------- ③ 섹션별 그리기 (화면 순서와 같음) ---------- */
 
-  // KPI 4개(진행 중인 연도가 있으면 올해 누적 포함 5개): 전년 대비, 전분기 대비는 서버가 계산해서 보내줌
+  // 가장 최근 달을 작년 같은 달과 비교 (서버가 보낸 national.monthly 사용: [{ ym: '2026-06', supply, avgTemp }], 오래된 순)
+  //   작년 같은 달이 없으면 증감률은 null (카드는 보여주되 증감 표시만 뺌)
+  const latestMonthOf = monthly => {
+    if (!monthly || !monthly.length) return null;
+    const last = monthly[monthly.length - 1];
+    const [y, m] = last.ym.split('-');
+    const prev = monthly.find(x => x.ym === `${Number(y) - 1}-${m}`);
+    return {
+      year: y, month: Number(m), supply: last.supply,
+      yoy: prev && prev.supply > 0 ? ((last.supply - prev.supply) / prev.supply) * 100 : null
+    };
+  };
+
+  // KPI 5개: 최신 월(작년 같은 달 대비) / 올해 누계(전년 동기 대비) / 기준 연도 연간 / 기온 민감도 / 예측 오차율
+  //   전년 대비, 전분기 대비는 서버가 계산해서 보내줌. 올해 누계는 진행 중인 연도가 없으면 빠짐(그때는 4개)
   const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape, hasSens }) => {
-    const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누적)
+    const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누계)
+    const latest = latestMonthOf(national.monthly);   // 월별 데이터가 없으면 null → 이 카드만 빠짐
     $('kpis').innerHTML = [
+      // 최신 월 카드에는 기온 차이를 붙이지 않음: 여름처럼 난방이 적은 달은 기온이 낮아도 공급이 줄어 '기온 때문' 으로 오해할 수 있음
+      latest && D.kpi({ label: `${latest.year}년 ${latest.month}월 가정용 공급량`, value: fmt(latest.supply), unit: '백만㎥', delta: latest.yoy, deltaLabel: '작년 같은 달 대비' }),
+      ytd && D.kpi({ label: `${ytd.year}년 누계 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
       D.kpi({ label: `전국 연간 가정용 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
-      ytd && D.kpi({ label: `${ytd.year}년 누적 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
       D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 평균 월 공급량 대비 증가분 (예측 모델 기준)', accent: 'var(--season-winter)' }),
-      // MAPE 는 비율이라 전분기와의 차이는 %p
-      D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: '전분기 대비', goodWhen: 'down' }),
-      D.kpi({ label: '오차 큰 지역', value: hasMape ? overLimit.length : '–', unit: '곳', caption: `MAPE ${MAPE_LIMIT}% 초과`, accent: 'var(--red-500)' })
+      // MAPE 는 비율이라 전분기와의 차이는 %p. 기준(MAPE_LIMIT)을 넘은 지역 수를 같은 카드에 함께 보여줌
+      D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: hasMape ? `전분기 대비 · ${MAPE_LIMIT}% 초과 ${overLimit.length}곳` : '전분기 대비', goodWhen: 'down' })
     ].filter(Boolean).join('');
   };
 
