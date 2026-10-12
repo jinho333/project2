@@ -87,9 +87,10 @@
 .trend-legend{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 /* 빠른 보기 / 연도 선택: 라벨 + 버튼들 한 줄씩 (버튼이 많아 줄이 바뀌어도 라벨은 첫 줄 옆에 그대로) */
 .trend-group{display:flex;align-items:flex-start;gap:10px}
-.trend-group-label{flex:none;width:56px;padding-top:4px;font-size:12px;color:var(--mute)}
-.trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:6px}
-.trend-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:12px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
+.trend-group-label{flex:none;width:56px;padding-top:7px;font-size:12px;color:var(--mute)}
+.trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:8px}
+/* 버튼 크기: 페이지의 다른 토글(높이 약 35px, 글자 14px)과 비슷하게 (기존 높이 26px·글자 12px 은 월별 보기의 주 조작 요소로는 작았음) */
+.trend-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:13px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
 .trend-chip i{display:inline-block;width:14px;height:4px;border-radius:2px}
 .trend-chip:hover{background:var(--surface-soft)}
 .trend-chip[data-y][aria-pressed="false"]{opacity:.5}
