@@ -14,7 +14,6 @@
 /* 2칸 배치 (한 칸이 320px 보다 좁아지면 자동으로 아래로 내려감) */
 .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .grid-wide{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
-.grid-corr{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
 .grid-sim{display:grid;grid-template-columns:minmax(280px,320px) minmax(0,1fr);gap:16px;align-items:start}
 .region-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .region-name{display:flex;align-items:center;gap:10px;margin-top:2px;flex-wrap:wrap}
@@ -25,7 +24,8 @@
 .stat-row b{color:var(--ink);font-variant-numeric:tabular-nums}
 /* 화면 너비 1100px 이하에서는 전부 1단으로 */
 @media (max-width:1100px){
-  .grid-map,.grid-wide,.grid-corr,.grid-sim{grid-template-columns:minmax(0,1fr)}
+  .grid-map,.grid-wide,.grid-sim{grid-template-columns:minmax(0,1fr)}
+  .corr-row{grid-template-columns:minmax(0,1fr);row-gap:6px}
   .map-card{position:static}
 }
 
@@ -141,9 +141,19 @@
 .corr-legend{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin-bottom:12px}
 .corr-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
 .corr-legend i:not(:first-child){margin-left:10px}
-.corr-row{padding:10px 0;border-top:1px solid var(--hairline-soft)}
+/* 요인 한 줄: 이름 | 막대 두 줄 | 오른쪽 한 줄 읽기 (3칸) */
+.corr-row{display:grid;grid-template-columns:96px minmax(0,1fr) 220px;column-gap:16px;align-items:center;padding:10px 0;border-top:1px solid var(--hairline-soft)}
 .corr-row:first-of-type{border-top:0}
-.corr-name{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.corr-row--axis{padding:2px 0 0;border-top:0}
+.corr-name{font-size:13px;font-weight:600;color:var(--ink)}
+.corr-read{font-size:12px;line-height:1.5;color:var(--body)}
+.corr-read b{font-weight:600;color:var(--ink)}
+/* 막대 아래 인사이트 박스 (내용이 없으면 안 보임) */
+.corr-insights{margin-top:14px;padding:12px 14px;background:var(--blue-100);border-radius:var(--radius-md);font-size:13px;line-height:1.6;color:var(--ink)}
+.corr-insights:empty,.corr-insights[hidden]{display:none}
+.corr-insights p{position:relative;margin:0 0 6px;padding-left:12px}
+.corr-insights p:last-child{margin-bottom:0}
+.corr-insights p::before{content:'';position:absolute;left:0;top:.7em;width:4px;height:4px;border-radius:50%;background:var(--blue-500)}
 .corr-name small{margin-left:6px;font-size:12px;font-weight:400;color:var(--mute)}
 .corr-bar{display:grid;grid-template-columns:56px 1fr 44px;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
 .corr-bar+.corr-bar{margin-top:4px}

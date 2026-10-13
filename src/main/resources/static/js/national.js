@@ -580,15 +580,16 @@
       : D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
   };
 
-  // 공급량과 함께 보여줄 요인 (이름, 보충 설명). 난방도일은 기온에서 계산한 값이라 같이 움직이는 게 당연함
-  const CORR_FACTORS = [
-    { name: '평균기온' },
-    { name: '난방도일', hint: '기온에서 계산' },
-    { name: '인구' },
-    { name: '세대수' }
-  ];
+  // 막대로 보여줄 요인: 서버가 보낸 변수 이름(corrLabels)에서 공급량 자신과 CORR_HIDDEN 을 뺀 것 → 서버에 변수가 늘면 행이 자동으로 늘어남
+  //   난방도일은 평균기온에서 계산한 값이라 두 행이 거의 같은 정보여서 막대에서 뺌 (전체 상관표에는 남음)
+  const CORR_HIDDEN = ['공급량', '난방도일'];
+  const CORR_HINTS = {};   // 이름 옆에 작게 붙일 보충 설명이 필요한 변수만 {이름: '설명'}
 
-  // 공급량과의 상관 막대: 요인마다 원본(계절 포함)과 계절 제거 두 줄. 가운데가 0, 오른쪽이 +, 왼쪽이 −
+  // 설명 비율(%): 같은 달끼리 비교한 상관 r 의 제곱. 작년 대비 공급량 변화 중 이 요인으로 설명되는 몫 (상관이지 원인은 아님)
+  const explainedPct = r => Math.round(r * r * 100);
+  const WEAK_PCT = 10;   // 설명 비율이 이보다 작으면 '월 단위로는 거의 설명하지 못함'
+
+  // 요인마다 두 줄: 전체(해마다 반복되는 월별 흐름 포함)와 같은 달끼리 비교(작년 같은 달과의 차이). 가운데가 0, 오른쪽이 +, 왼쪽이 −
   const drawCorrBars = ({ corrLabels, corr, corrYoy }) => {
     const valueOf = (matrix, name) => {
       const j = corrLabels.indexOf(name);
@@ -600,58 +601,88 @@
       const side = v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`;
       return `<div class="corr-bar"><span>${tag}</span><div class="corr-track"><span class="corr-fill" style="${side};background:${color}"></span></div><b>${corrText(v)}</b></div>`;
     };
+    // 행 오른쪽 한 줄: 같은 달끼리 비교 값이 없으면 비워 둠
+    const reading = v => v === null || v === undefined ? ''
+      : explainedPct(v) < WEAK_PCT ? `월 단위로는 거의 설명하지 못함 (${explainedPct(v)}%)` : `작년 대비 공급 변화의 <b>${explainedPct(v)}%</b>를 설명`;
     const raw = C('--stone'), yoyColor = C('--seq-4');
+    const rows = corrLabels.filter(name => !CORR_HIDDEN.includes(name)).map(name =>
+      `<div class="corr-row"><div class="corr-name">${esc(name)}${CORR_HINTS[name] ? `<small>${esc(CORR_HINTS[name])}</small>` : ''}</div>` +
+      `<div>${bar('전체', valueOf(corr, name), raw)}${bar('같은 달', valueOf(corrYoy, name), yoyColor)}</div>` +
+      `<div class="corr-read">${reading(valueOf(corrYoy, name))}</div></div>`).join('');
     $('corrBars').innerHTML =
-      `<div class="corr-legend"><i style="background:${raw}"></i>원본(계절 포함)<i style="background:${yoyColor}"></i>전년 동월 대비 변화(계절·추세 제거)</div>` +
-      CORR_FACTORS.map(f =>
-        `<div class="corr-row"><div class="corr-name">${f.name}${f.hint ? `<small>${f.hint}</small>` : ''}</div>` +
-        bar('원본', valueOf(corr, f.name), raw) + bar('전년비', valueOf(corrYoy, f.name), yoyColor) + '</div>').join('') +
-      '<div class="corr-axis"><span></span><span><span>−1</span><span>0</span><span>+1</span></span><span></span></div>';
+      `<div class="corr-legend"><i style="background:${raw}"></i>전체(해마다 반복되는 월별 흐름 포함)<i style="background:${yoyColor}"></i>같은 달끼리 비교(작년 같은 달과의 차이)</div>` + rows +
+      '<div class="corr-row corr-row--axis"><span></span><div class="corr-axis"><span></span><span><span>−1</span><span>0</span><span>+1</span></span><span></span></div><span></span></div>';
   };
 
-  // 오른쪽 설명 박스: r 값과 문장을 서버가 보낸 상관계수에서 만듦
-  const corrNotesOf = ({ corrLabels, corr, corrYoy }) => {
-    const corrOf = (matrix, a, b) => {
-      const i = corrLabels.indexOf(a), j = corrLabels.indexOf(b);
-      return !matrix || i < 0 || j < 0 ? null : matrix[i][j];
+  // 최소제곱 기울기 (x 가 1 늘 때 y 의 변화). 점이 2개 미만이거나 x 가 모두 같으면 null
+  const slopeOf = pts => {
+    const n = pts.length;
+    if (n < 2) return null;
+    const mx = pts.reduce((s, p) => s + p[0], 0) / n, my = pts.reduce((s, p) => s + p[1], 0) / n;
+    const sxx = pts.reduce((s, p) => s + (p[0] - mx) ** 2, 0);
+    return sxx > 0 ? pts.reduce((s, p) => s + (p[0] - mx) * (p[1] - my), 0) / sxx : null;
+  };
+
+  // 같은 달끼리 비교한 쌍: 작년 같은 달이 있는 달만 [{ ym, month, dTemp: 기온 차이(°C), pct: 공급량 증감(%) }]
+  const sameMonthPairs = monthly => {
+    const byYm = new Map((monthly || []).map(m => [m.ym, m]));
+    return (monthly || []).flatMap(m => {
+      const [y, mo] = m.ym.split('-');
+      const p = byYm.get(`${Number(y) - 1}-${mo}`);
+      const ok = p && p.supply > 0 && typeof m.avgTemp === 'number' && typeof p.avgTemp === 'number';
+      return ok ? [{ ym: m.ym, year: Number(y), month: Number(mo), dTemp: m.avgTemp - p.avgTemp, pct: (m.supply / p.supply - 1) * 100 }] : [];
+    });
+  };
+
+  // 막대 아래 인사이트 박스(최대 4줄): 숫자를 고정 문장 틀에 넣어 만들며, 근거가 부족한 줄은 빼고 단정하지 않음
+  //   ① 달력 효과  ② 관측 민감도(예측 모델 값과 다름을 표시)  ③ 가장 큰 기온 차이 달  ④ 월 단위 설명력이 작은 요인과 자료 한계
+  const MIN_PAIRS = 12, MIN_WINTER_PAIRS = 8;
+  const corrInsightsOf = ({ corrLabels, corr, corrYoy, monthly }) => {
+    const corrWith = (matrix, name) => {
+      const j = corrLabels.indexOf(name);
+      return !matrix || j < 0 ? null : matrix[0][j];
     };
-    const notes = [];
-    const hdd = corrOf(corr, '공급량', '난방도일'), temp = corrOf(corr, '공급량', '평균기온');
-    const hddYoy = corrOf(corrYoy, '공급량', '난방도일'), tempYoy = corrOf(corrYoy, '공급량', '평균기온');
-    if (hdd !== null && hddYoy !== null && tempYoy !== null) {
-      notes.push(D.callout('blue', '계절·추세를 빼도 기온 영향은 남음',
-        `원본 난방도일 r = ${corrText(hdd)}은 겨울에 추우면서 공급이 많은 계절 패턴이 더해진 값입니다. 작년 같은 달과 비교한 변화끼리 보아도 난방도일 ${corrText(hddYoy)}, 평균기온 ${corrText(tempYoy)}로, 작년보다 추운 달일수록 공급이 늘었습니다.`));
-    } else if (hdd !== null) {
-      notes.push(D.callout('blue', `공급량 ↔ 난방도일 r = ${corrText(hdd)}`,
-        temp !== null && Math.abs(hdd) > Math.abs(temp) ? `기온(r = ${corrText(temp)})보다 난방도일(18°C 기준)이 공급량을 더 잘 설명합니다.` : '난방도일(18°C 기준)과 기온 모두 공급량과 비슷한 수준으로 연동됩니다.'));
+    const lines = [];
+
+    const t = corrWith(corr, '평균기온'), tYoy = corrWith(corrYoy, '평균기온');
+    if (t !== null && tYoy !== null) {
+      lines.push(Math.abs(tYoy) >= 0.5
+        ? `기온과의 ${corrText(t)}은 대부분 달력(계절) 효과입니다. 같은 달끼리 비교해도 ${corrText(tYoy)}로, 평소보다 ${tYoy < 0 ? '추운' : '따뜻한'} 달에 공급이 늘었습니다.`
+        : `기온과의 ${corrText(t)}은 대부분 달력(계절) 효과입니다. 같은 달끼리 비교하면 ${corrText(tYoy)}로 약해집니다.`);
     }
-    const pop = corrOf(corr, '공급량', '인구'), popYoy = corrOf(corrYoy, '공급량', '인구');
-    const hhYoy = corrOf(corrYoy, '공급량', '세대수');
-    if (pop !== null && popYoy !== null && hhYoy !== null) {
-      // 월별 공급량은 계절 변동이 커서 원본 상관이 낮으면 '영향 없음'으로 읽히기 쉬움 → 전년 동월 대비로도 같은 결과인지 함께 보여줌
-      const weak = Math.abs(popYoy) < 0.3 && Math.abs(hhYoy) < 0.3;
-      notes.push(D.callout('purple', '인구·세대수와는 뚜렷한 관계가 안 보임',
-        `인구는 원본 ${corrText(pop)}, 전년 동월 대비 ${corrText(popYoy)}이고 세대수는 원본 ${corrText(corrOf(corr, '공급량', '세대수'))}, 전년 동월 대비 ${corrText(hhYoy)}입니다. ${weak ? '계절과 추세를 빼도 모두 약해서, 월별 공급량의 움직임은 주로 기온이 설명합니다. 다만 5년 남짓한 자료라 인구의 장기 영향까지 배제하는 것은 아닙니다.' : '값이 일정하지 않아 해석에 주의가 필요합니다.'}`));
+
+    const pairs = sameMonthPairs(monthly);
+    const slope = pairs.length >= MIN_PAIRS ? slopeOf(pairs.map(p => [p.dTemp, p.pct])) : null;
+    if (slope !== null && slope < 0) {
+      const winter = pairs.filter(p => p.month === 12 || p.month <= 2);
+      const winterSlope = winter.length >= MIN_WINTER_PAIRS ? slopeOf(winter.map(p => [p.dTemp, p.pct])) : null;
+      lines.push(`관측: 작년 같은 달보다 1°C 추웠던 달은 공급이 평균 약 ${Math.round(-slope)}% 많았습니다(${winterSlope !== null && winterSlope < 0 ? `겨울 약 ${Math.round(-winterSlope)}%, ` : ''}${pairs.length}개월 기준). 예측 모델 값인 기온 민감도와는 계산 방식이 다릅니다.`);
     }
-    const popHousehold = corrOf(corr, '인구', '세대수'), popHouseholdYoy = corrOf(corrYoy, '인구', '세대수');
-    if (popHousehold !== null && Math.abs(popHousehold) >= 0.9) {
-      notes.push(D.callout('blue', `인구 ↔ 세대수 r = ${corrText(popHousehold)}`,
-        `${popHousehold < 0 ? '서로 반대 방향으로 ' : ''}매우 강하게 움직이는 것처럼 보이지만, 전년 동월 대비 변화로는 ${popHouseholdYoy !== null ? corrText(popHouseholdYoy) : '-'}로 약해집니다. 두 변수가 장기 추세를 따라 함께 움직여서 생긴 값에 가깝습니다. (전체 상관표에서 확인)`));
+
+    if (pairs.length >= MIN_PAIRS) {
+      const big = pairs.reduce((a, b) => Math.abs(b.dTemp) > Math.abs(a.dTemp) ? b : a);
+      lines.push(`가장 큰 차이: ${big.year}년 ${big.month}월은 작년보다 ${Math.abs(big.dTemp).toFixed(1)}°C ${big.dTemp < 0 ? '추웠고' : '따뜻했고'} 공급이 ${Math.abs(big.pct).toFixed(1)}% ${big.pct >= 0 ? '늘었' : '줄었'}습니다.`);
     }
-    return notes.join('');
+
+    const weak = corrLabels.filter(name => !CORR_HIDDEN.includes(name) && corrWith(corrYoy, name) !== null && explainedPct(corrWith(corrYoy, name)) < WEAK_PCT);
+    if (weak.length) {
+      lines.push(`${weak.map(esc).join('·')}처럼 월 단위로는 설명력이 작은 요인은, ${Math.floor((monthly || []).length / 12)}년 남짓한 자료로는 장기 영향까지 판단하기 어렵습니다.`);
+    }
+    return lines.map(text => `<p>${text}</p>`).join('');
   };
 
-  // 상관계수: [요인 비교] 공급량과의 막대 / [상관표] 전체 상관표(히트맵, 기준은 원본 또는 전년 동월 대비)
+  // 상관계수: [요인 비교] 요인별 막대 + 인사이트 / [상관표] 전체 상관표(히트맵, 기준은 전체 또는 같은 달끼리 비교)
   //   히트맵 lower = 대각선과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
   const CORR_VIEWS = [{ id: 'factors', label: '요인 비교' }, { id: 'table', label: '상관표' }];
-  const CORR_BASES = [{ id: 'raw', label: '원본(계절 포함)' }, { id: 'yoy', label: '전년 동월 대비' }];
-  const drawCorrelation = ({ national, period }) => {
+  const CORR_BASES = [{ id: 'raw', label: '전체' }, { id: 'yoy', label: '같은 달끼리 비교' }];
+  const drawCorrelation = ({ national }) => {
     let view = 'factors', basis = 'raw';
-    const bases = national.corrYoy ? CORR_BASES : CORR_BASES.slice(0, 1);   // 전년 동월 대비 값이 없으면 기준 스위치는 숨김
+    const bases = national.corrYoy ? CORR_BASES : CORR_BASES.slice(0, 1);   // 같은 달끼리 비교 값이 없으면 기준 스위치는 숨김
     let syncBasis = () => {};
     const render = () => {
       const matrix = basis === 'yoy' && national.corrYoy ? national.corrYoy : national.corr;
       $('corrBars').hidden = view !== 'factors';
+      $('corrInsights').hidden = view !== 'factors';
       $('corrTable').hidden = view !== 'table';
       $('corrBasisSwitch').hidden = view !== 'table' || bases.length < 2;
       syncBasis();   // 보이게 된 뒤에 선택 배경 위치를 맞춤
@@ -660,8 +691,7 @@
     slideTabs($('corrTabs'), CORR_VIEWS, view, v => { view = v; render(); });
     syncBasis = slideTabs($('corrBasisTabs'), bases, basis, b => { basis = b; render(); });
     drawCorrBars(national);
-    $('corrSub').textContent = `전국 월별 데이터${period ? '(' + period + ')' : ''} · 공급량과의 상관계수(r)`;
-    $('corrNotes').innerHTML = corrNotesOf(national);
+    $('corrInsights').innerHTML = corrInsightsOf(national);
     render();
   };
 
