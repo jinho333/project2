@@ -582,7 +582,9 @@
 
   // 막대로 보여줄 요인: 서버가 보낸 변수 이름(corrLabels)에서 공급량 자신과 CORR_HIDDEN 을 뺀 것 → 서버에 변수가 늘면 행이 자동으로 늘어남
   //   난방도일은 평균기온에서 계산한 값이라 두 행이 거의 같은 정보여서 막대에서 뺌 (전체 상관표에는 남음)
-  const CORR_HIDDEN = ['공급량', '난방도일'];
+  // 표에서도 뺄 파생 변수와 이유: 다른 변수에서 계산한 값이라 같은 정보를 반복해서 보여줌 (서버 응답에는 그대로 있음)
+  const CORR_DERIVED = { '난방도일': '평균기온에서 계산한 값' };
+  const CORR_HIDDEN = ['공급량', ...Object.keys(CORR_DERIVED)];   // 막대에서 뺄 이름 (공급량은 비교 기준이라 막대에서만 뺌)
   const CORR_HINTS = {};   // 이름 옆에 작게 붙일 보충 설명이 필요한 변수만 {이름: '설명'}
 
   // 설명 비율(%): 같은 달끼리 비교한 상관 r 의 제곱. 작년 대비 공급량 변화 중 이 요인으로 설명되는 몫 (상관이지 원인은 아님)
@@ -671,27 +673,50 @@
     return lines.map(text => `<p>${text}</p>`).join('');
   };
 
-  // 상관계수: [요인 비교] 요인별 막대 + 인사이트 / [상관표] 전체 상관표(히트맵, 기준은 전체 또는 같은 달끼리 비교)
+  // 상관표 아래 설명 (값에서 만듦)
+  //   ① 전체에서는 매우 강하지만 같은 달끼리 비교하면 크게 약해지는 쌍 (장기 추세를 따라 함께 움직인 값일 수 있음)
+  //   ② 표에서 뺀 변수와 이유
+  const corrTableNoteOf = ({ corrLabels, corr, corrYoy }) => {
+    const shown = corrLabels.map((_, i) => i).filter(i => !(corrLabels[i] in CORR_DERIVED));
+    let top = null;
+    if (corr && corrYoy) shown.forEach(i => shown.forEach(j => {
+      if (j >= i) return;
+      const raw = corr[i][j], yoy = corrYoy[i][j];
+      if (raw === null || yoy === null || Math.abs(raw) < 0.9) return;
+      const drop = Math.abs(raw) - Math.abs(yoy);
+      if (drop >= 0.3 && (!top || drop > top.drop)) top = { i, j, raw, yoy, drop };
+    }));
+    const lines = [];
+    if (top) lines.push(`${esc(corrLabels[top.i])} ↔ ${esc(corrLabels[top.j])}: 전체 ${corrText(top.raw)}, 같은 달끼리 비교 ${corrText(top.yoy)}. 강해 보이는 값이 같은 달끼리 비교하면 약해지는 것은 두 변수가 장기 추세를 따라 함께 움직였기 때문일 수 있습니다.`);
+    const dropped = corrLabels.filter(name => name in CORR_DERIVED);
+    if (dropped.length) lines.push(`표에서 뺀 변수: ${dropped.map(name => `${esc(name)}(${esc(CORR_DERIVED[name])})`).join(', ')}`);
+    return lines.map(text => `<p>${text}</p>`).join('');
+  };
+
+  // 상관계수: [요인 비교] 요인별 막대 + 인사이트 / [상관표] 전체와 같은 달끼리 비교 두 표를 나란히 + 설명
   //   히트맵 lower = 대각선과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
   const CORR_VIEWS = [{ id: 'factors', label: '요인 비교' }, { id: 'table', label: '상관표' }];
-  const CORR_BASES = [{ id: 'raw', label: '전체' }, { id: 'yoy', label: '같은 달끼리 비교' }];
   const drawCorrelation = ({ national }) => {
-    let view = 'factors', basis = 'raw';
-    const bases = national.corrYoy ? CORR_BASES : CORR_BASES.slice(0, 1);   // 같은 달끼리 비교 값이 없으면 기준 스위치는 숨김
-    let syncBasis = () => {};
+    let view = 'factors';
+    const keep = national.corrLabels.map((_, i) => i).filter(i => !(national.corrLabels[i] in CORR_DERIVED));
+    const labels = keep.map(i => national.corrLabels[i]);
+    const subMatrix = matrix => matrix && keep.map(i => keep.map(j => matrix[i][j]));   // 뺀 변수의 행·열을 제거
+    // 표 두 개: 범례는 아래 한 곳에만 두기 위해 두 번째 표의 범례를 #corrScale 로 옮김. 같은 달끼리 비교 값이 없으면 표 하나만
+    D.renderHeatmap($('heatmapRaw'), labels, subMatrix(national.corr), { lower: true, scale: false, hint: false });
+    $('heatmapYoyBox').hidden = !national.corrYoy;
+    if (national.corrYoy) {
+      D.renderHeatmap($('heatmapYoy'), labels, subMatrix(national.corrYoy), { lower: true, hint: false });
+      $('corrScale').appendChild($('heatmapYoy').querySelector('.hm-scale'));
+    }
     const render = () => {
-      const matrix = basis === 'yoy' && national.corrYoy ? national.corrYoy : national.corr;
       $('corrBars').hidden = view !== 'factors';
       $('corrInsights').hidden = view !== 'factors';
       $('corrTable').hidden = view !== 'table';
-      $('corrBasisSwitch').hidden = view !== 'table' || bases.length < 2;
-      syncBasis();   // 보이게 된 뒤에 선택 배경 위치를 맞춤
-      D.renderHeatmap($('heatmap'), national.corrLabels, matrix, { lower: true });
     };
     slideTabs($('corrTabs'), CORR_VIEWS, view, v => { view = v; render(); });
-    syncBasis = slideTabs($('corrBasisTabs'), bases, basis, b => { basis = b; render(); });
     drawCorrBars(national);
     $('corrInsights').innerHTML = corrInsightsOf(national);
+    $('corrTableNote').innerHTML = corrTableNoteOf(national);
     render();
   };
 

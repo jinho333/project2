@@ -117,7 +117,7 @@
                     </section>
                 </div>
 
-                <!-- ⑤ 공급량과 관련된 요인: 보기 스위치 (#corrTabs): 요인별 상관 막대 (#corrBars) + 아래 인사이트 박스 (#corrInsights) / 전체 상관표 (#corrTable > #heatmap, 기준 스위치 #corrBasisTabs) -->
+                <!-- ⑤ 공급량과 관련된 요인: 보기 스위치 (#corrTabs): 요인별 상관 막대 (#corrBars) + 아래 인사이트 박스 (#corrInsights) / 상관표 두 개 나란히 (#corrTable > #heatmapRaw, #heatmapYoy) -->
                 <section class="card">
                     <div class="card-head">
                         <div>
@@ -125,10 +125,6 @@
                             <div class="card-sub">요인 값이 큰 달에 공급량이 많은지(+)·적은지(−), 그 경향이 얼마나 뚜렷한지를 −1~+1로 나타냅니다. 원인을 뜻하지는 않습니다.</div>
                         </div>
                         <div class="head-switches">
-                            <!-- 기준 스위치는 상관표 화면일 때만 보임 (왼쪽에 둬서 보기 스위치 위치가 안 바뀌게) -->
-                            <div class="metric-switch" id="corrBasisSwitch" hidden>
-                                <div id="corrBasisTabs" class="tabs tabs--slide" role="group" aria-label="기준 전환"></div>
-                            </div>
                             <div class="metric-switch">
                                 <div id="corrTabs" class="tabs tabs--slide" role="group" aria-label="보기 전환"></div>
                             </div>
@@ -137,7 +133,12 @@
                     <div class="card-body">
                         <div id="corrBars"></div>
                         <div id="corrTable" hidden>
-                            <div id="heatmap"></div>
+                            <div class="hm-pair">
+                                <div><div class="hm-title">전체</div><div id="heatmapRaw"></div></div>
+                                <div id="heatmapYoyBox"><div class="hm-title">같은 달끼리 비교</div><div id="heatmapYoy"></div></div>
+                            </div>
+                            <div id="corrScale"></div>
+                            <div id="corrTableNote" class="corr-insights"></div>
                         </div>
                         <div id="corrInsights" class="corr-insights"></div>
                     </div>

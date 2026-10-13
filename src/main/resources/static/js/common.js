@@ -120,7 +120,7 @@
   const seqInk = t => (t >= 0.6 ? '#fff' : 'var(--ink)');
 
   // divColor(v) : 상관계수(-1 ~ 1)를 색으로 바꿈 (상관계수 표의 칸 색)
-  //   -1 에 가까우면 진한 파랑, 0 은 흰색, +1 에 가까우면 진한 빨강 (7단계)
+  //   -1 에 가까우면 진한 보라, 0 은 연한 회색, +1 에 가까우면 진한 주황 (7단계. 파랑·빨강은 다른 차트에서 쓰는 뜻과 겹쳐 피함)
   //   예) divColor(-1) → 'var(--div-neg-3)'     divColor(0) → 'var(--div-0)'     divColor(1) → 'var(--div-pos-3)'
   //   계산: -1~1 을 0~6 번째로 바꿈 → (v + 1) / 2 × 6 을 반올림
   const DIV = ['--div-neg-3', '--div-neg-2', '--div-neg-1', '--div-0', '--div-pos-1', '--div-pos-2', '--div-pos-3'];
@@ -787,10 +787,12 @@
   //   labels : 변수 이름 배열              예) ['공급량', '평균기온', '난방도일', '인구', '세대수']
   //   M      : 상관계수 2차원 배열          M[r][c] = labels[r] 과 labels[c] 의 상관계수
   //   옵션 lower : true 면 아래쪽 삼각형만 그림
+  //   옵션 scale : false 면 표 아래 색 범례를 그리지 않음 (표를 여러 개 놓고 범례를 따로 둘 때)
+  //   옵션 hint  : false 면 마우스를 올렸을 때 나오는 설명 줄을 그리지 않음 (이름 굵게 표시는 그대로)
   //     (대각선은 자기 자신이라 항상 1.00 이고, 위쪽 삼각형은 아래쪽과 같은 값이라 생략)
   //   칸 색은 divColor, 글자색은 아주 진한 칸(절댓값 0.83 이상)만 흰색
   //   칸에 마우스를 올리면 그 행·열 이름이 굵어지고, 표 아래 한 줄에 '매우 강한 양의 상관' 같은 설명이 나옴
-  function renderHeatmap(el, labels, M, { lower = false } = {}) {
+  function renderHeatmap(el, labels, M, { lower = false, scale = true, hint = true } = {}) {
     const all = labels.map((_, i) => i);             // [0, 1, 2, ...]  변수 번호 목록 (_ 는 안 쓰는 값이라는 표시)
     // lower 면 행에서는 첫 변수를, 열에서는 마지막 변수를 뺌 (그 줄은 전부 빈칸이 되기 때문)
     const rowIdx = lower ? all.slice(1) : all;       // slice(1)     : 첫 번째를 뺀 나머지
@@ -822,9 +824,9 @@
     });
     h += '</div>';
     // 표 아래 색 범례: −1 [색 7칸] +1
-    h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 빨강 = 같이 증가, 파랑 = 반대로 움직임</span></div>`;
+    if (scale) h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 주황 = 같이 증가, 보라 = 반대로 움직임</span></div>`;
     // 설명이 나올 한 줄 (처음에는 안내 문구)
-    h += `<div class="hm-readout">${HINT}</div>`;
+    if (hint) h += `<div class="hm-readout">${HINT}</div>`;
     el.innerHTML = h;
 
     const readout = el.querySelector('.hm-readout');
@@ -840,12 +842,12 @@
       // 마우스가 들어오면: 이름 굵게 + 아래 줄에 설명
       cell.onmouseenter = () => {
         mark(r, c, true);
-        readout.innerHTML = `<b>${labels[r]} ↔ ${labels[c]}</b> r = ${v.toFixed(2)} · ${corrStrength(v)}`;
+        if (readout) readout.innerHTML = `<b>${labels[r]} ↔ ${labels[c]}</b> r = ${v.toFixed(2)} · ${corrStrength(v)}`;
       };
       // 마우스가 나가면: 원래대로
       cell.onmouseleave = () => {
         mark(r, c, false);
-        readout.textContent = HINT;
+        if (readout) readout.textContent = HINT;
       };
     });
   }

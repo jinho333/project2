@@ -40,7 +40,7 @@
 --seq-0:#f3f4ef;--seq-1:#dceaf6;--seq-2:#a9cbee;--seq-3:#6aa6e6;--seq-4:#2c84e0;--seq-5:#1a5ea8;
 /* Diverging (correlation −1…+1) */
 /* 상관계수 히트맵: 음수=파랑, 0=흰색, 양수=빨강 */
---div-neg-3:#1a5ea8;--div-neg-2:#6aa6e6;--div-neg-1:#c3daf2;--div-0:#f3f4ef;--div-pos-1:#f2c4bf;--div-pos-2:#e07b72;--div-pos-3:#a8322a;
+--div-neg-3:#542788;--div-neg-2:#998ec3;--div-neg-1:#d8daeb;--div-0:#f3f4ef;--div-pos-1:#fee0b6;--div-pos-2:#f1a340;--div-pos-3:#b35806;
 }
 
 /* 글꼴·글자 크기 */
