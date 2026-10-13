@@ -652,9 +652,11 @@
 
     const t = corrWith(corr, '평균기온'), tYoy = corrWith(corrYoy, '평균기온');
     if (t !== null && tYoy !== null) {
+      const dir = t < 0 ? '반대로' : '같은 방향으로';
+      const lead = `<b>계절 흐름 때문에 강해 보입니다.</b> 기온과 공급량은 ${dir} 움직이며 상관이 ${corrText(t)}입니다. 하지만 대부분은 겨울에 춥고 겨울에 가스를 많이 쓰는, 해마다 반복되는 흐름 때문입니다.`;
       lines.push(Math.abs(tYoy) >= 0.5
-        ? `기온과의 ${corrText(t)}은 대부분 달력(계절) 효과입니다. 같은 달끼리 비교해도 ${corrText(tYoy)}로, 평소보다 ${tYoy < 0 ? '추운' : '따뜻한'} 달에 공급이 늘었습니다.`
-        : `기온과의 ${corrText(t)}은 대부분 달력(계절) 효과입니다. 같은 달끼리 비교하면 ${corrText(tYoy)}로 약해집니다.`);
+        ? `${lead} 같은 달끼리(예: 올해 2월과 작년 2월) 비교해도 상관은 ${corrText(tYoy)}입니다. 이 값이 여전히 강해서, <b>평소보다 ${tYoy < 0 ? '추운' : '따뜻한'} 달에는 실제로 공급이 더 늘었습니다.</b>`
+        : `${lead} 같은 달끼리 비교하면 상관은 ${corrText(tYoy)}입니다. 계절 흐름을 빼면 관계가 약해집니다.`);
     }
 
     const pairs = sameMonthPairs(monthly);
@@ -662,17 +664,19 @@
     if (slope !== null && slope < 0) {
       const winter = pairs.filter(p => p.month === 12 || p.month <= 2);
       const winterSlope = winter.length >= MIN_WINTER_PAIRS ? slopeOf(winter.map(p => [p.dTemp, p.pct])) : null;
-      lines.push(`관측: 작년 같은 달보다 1°C 추웠던 달은 공급이 평균 약 ${Math.round(-slope)}% 많았습니다(${winterSlope !== null && winterSlope < 0 ? `겨울 약 ${Math.round(-winterSlope)}%, ` : ''}${pairs.length}개월 기준). 예측 모델 값인 기온 민감도와는 계산 방식이 다릅니다.`);
+      const pct = Math.round(-slope);
+      const tail = winterSlope !== null && winterSlope < 0 ? ` 많았고, 겨울(12~2월)만 보면 약 ${Math.round(-winterSlope)}%입니다` : ' 많았습니다';
+      lines.push(`<b>기온이 1°C 낮으면 공급은 약 ${pct}% 늘었습니다(실제 기록).</b> 작년 같은 달과 비교해 1°C 더 추웠던 달은 공급이 평균 약 ${pct}%${tail}(${pairs.length}개월 기준). 예측 모델이 추정한 기온 민감도와는 계산 방식이 달라 숫자가 다릅니다.`);
     }
 
     if (pairs.length >= MIN_PAIRS) {
       const big = pairs.reduce((a, b) => Math.abs(b.dTemp) > Math.abs(a.dTemp) ? b : a);
-      lines.push(`가장 큰 차이: ${big.year}년 ${big.month}월은 작년보다 ${Math.abs(big.dTemp).toFixed(1)}°C ${big.dTemp < 0 ? '추웠고' : '따뜻했고'} 공급이 ${Math.abs(big.pct).toFixed(1)}% ${big.pct >= 0 ? '늘었' : '줄었'}습니다.`);
+      lines.push(`<b>가장 큰 기온 차이를 보인 달:</b> ${big.year}년 ${big.month}월은 작년 ${big.month}월보다 평균기온이 ${Math.abs(big.dTemp).toFixed(1)}°C ${big.dTemp < 0 ? '낮았고' : '높았고'}, 공급량은 ${Math.abs(big.pct).toFixed(1)}% ${big.pct >= 0 ? '늘었' : '줄었'}습니다.`);
     }
 
     const weak = corrLabels.filter(name => !CORR_HIDDEN.includes(name) && corrWith(corrYoy, name) !== null && explainedPct(corrWith(corrYoy, name)) < WEAK_PCT);
     if (weak.length) {
-      lines.push(`${weak.map(esc).join('·')}처럼 월 단위로는 설명력이 작은 요인은, ${Math.floor((monthly || []).length / 12)}년 남짓한 자료로는 장기 영향까지 판단하기 어렵습니다.`);
+      lines.push(`<b>${weak.map(esc).join('·')}처럼 월 단위로는 거의 설명하지 못하는 요인이 있습니다</b>(설명 비율: ${weak.map(name => `${esc(name)} ${explainedPct(corrWith(corrYoy, name))}%`).join(', ')}). 다만 영향이 없다는 뜻은 아닙니다. ${Math.floor((monthly || []).length / 12)}년 남짓한 자료로는 장기 영향까지 판단하기 어렵습니다.`);
     }
     return lines.map(text => `<p>${text}</p>`).join('');
   };
@@ -693,12 +697,10 @@
     return top;
   };
 
-  // 읽는 법 패널의 설명 (값에서 만듦): ① 점선 칸 설명 ② 표에서 뺀 변수와 이유
+  // 읽는 법 패널의 설명 (값에서 만듦): 점선 칸 설명. 표에서 뺀 변수(CORR_DERIVED)는 화면에 적지 않음(독자가 모르는 용어를 꺼내게 되므로)
   const corrTableNoteOf = national => {
     const { corrLabels } = national, top = corrTopDrop(national), lines = [];
     if (top) lines.push(`점선 칸: ${esc(corrLabels[top.i])} ↔ ${esc(corrLabels[top.j])} — 전체 ${corrText(top.raw)}, 같은 달끼리 비교 ${corrText(top.yoy)}. 강해 보이는 값이 같은 달끼리 비교하면 약해지는 것은 두 변수가 장기 추세를 따라 함께 움직였기 때문일 수 있습니다.`);
-    const dropped = corrLabels.filter(name => name in CORR_DERIVED);
-    if (dropped.length) lines.push(`표에서 뺀 변수: ${dropped.map(name => `${esc(name)}(${esc(CORR_DERIVED[name])})`).join(', ')}`);
     return lines.map(text => `<p>${text}</p>`).join('');
   };
 

@@ -159,6 +159,7 @@
 .corr-insights:empty,.corr-insights[hidden]{display:none}
 .corr-insights p{position:relative;margin:0 0 6px;padding-left:12px}
 .corr-insights p:last-child{margin-bottom:0}
+.corr-insights b{font-weight:600}
 .corr-insights p::before{content:'';position:absolute;left:0;top:.7em;width:4px;height:4px;border-radius:50%;background:var(--blue-500)}
 .corr-name small{margin-left:6px;font-size:12px;font-weight:400;color:var(--mute)}
 .corr-bar{display:grid;grid-template-columns:56px 1fr 44px;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
@@ -191,7 +192,7 @@
 .hm-col[data-c="0"]{font-weight:700;color:var(--ink)}
 .hm-cell[data-c="0"]{box-shadow:inset 0 0 0 1.5px rgba(35,37,29,.45)}
 /* 설명이 가리키는 칸: 점선 */
-.hm-flag{outline:2px dashed var(--ink);outline-offset:-3px}
+.hm-flag{outline:2px dashed var(--ink);outline-offset:1px}
 .corr-aside-title{margin-bottom:8px;font-size:13px;font-weight:600;color:var(--ink)}
 #corrScale .hm-scale{flex-wrap:wrap;padding-left:0;margin-top:0}
 .corr-aside .corr-insights{margin-top:14px}
