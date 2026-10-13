@@ -120,7 +120,7 @@
   const seqInk = t => (t >= 0.6 ? '#fff' : 'var(--ink)');
 
   // divColor(v) : 상관계수(-1 ~ 1)를 색으로 바꿈 (상관계수 표의 칸 색)
-  //   -1 에 가까우면 진한 보라, 0 은 연한 회색, +1 에 가까우면 진한 주황 (7단계. 파랑·빨강은 다른 차트에서 쓰는 뜻과 겹쳐 피함)
+  //   -1 에 가까우면 진한 청록, 0 은 연한 회색, +1 에 가까우면 진한 주황(테라코타) (7단계. ColorBrewer BrBG 를 사이트 상단 바 색에 맞춰 변형. 파랑·빨강은 다른 차트에서 쓰는 뜻과 겹쳐 피함)
   //   예) divColor(-1) → 'var(--div-neg-3)'     divColor(0) → 'var(--div-0)'     divColor(1) → 'var(--div-pos-3)'
   //   계산: -1~1 을 0~6 번째로 바꿈 → (v + 1) / 2 × 6 을 반올림
   const DIV = ['--div-neg-3', '--div-neg-2', '--div-neg-1', '--div-0', '--div-pos-1', '--div-pos-2', '--div-pos-3'];
@@ -824,7 +824,7 @@
     });
     h += '</div>';
     // 표 아래 색 범례: −1 [색 7칸] +1
-    if (scale) h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 주황 = 같이 증가, 보라 = 반대로 움직임</span></div>`;
+    if (scale) h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 주황 = 같이 증가, 청록 = 반대로 움직임</span></div>`;
     // 설명이 나올 한 줄 (처음에는 안내 문구)
     if (hint) h += `<div class="hm-readout">${HINT}</div>`;
     el.innerHTML = h;

@@ -603,16 +603,20 @@
       const side = v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`;
       return `<div class="corr-bar"><span>${tag}</span><div class="corr-track"><span class="corr-fill" style="${side};background:${color}"></span></div><b>${corrText(v)}</b></div>`;
     };
-    // 행 오른쪽 한 줄: 같은 달끼리 비교 값이 없으면 비워 둠
-    const reading = v => v === null || v === undefined ? ''
-      : explainedPct(v) < WEAK_PCT ? `월 단위로는 거의 설명하지 못함 (${explainedPct(v)}%)` : `작년 대비 공급 변화의 <b>${explainedPct(v)}%</b>를 설명`;
+    // 행 오른쪽: 설명 비율(%) 숫자와 0~100% 막대. 무엇의 몇 %인지는 열 제목(head)에서 한 번 설명. 같은 달끼리 비교 값이 없으면 비워 둠
+    const reading = v => {
+      if (v === null || v === undefined) return '';
+      const pct = explainedPct(v);
+      return `<b>${pct}%</b>${pct < WEAK_PCT ? ' · 거의 설명하지 못함' : ''}<span class="corr-meter"><i style="width:${pct}%"></i></span>`;
+    };
+    const readHead = '<div class="corr-read-head"><b>설명 비율</b>작년 같은 달보다 공급이 늘거나 준 폭 중, 이 요인으로 설명되는 몫</div>';
     const raw = C('--stone'), yoyColor = C('--seq-4');
     const rows = corrLabels.filter(name => !CORR_HIDDEN.includes(name)).map(name =>
       `<div class="corr-row"><div class="corr-name">${esc(name)}${CORR_HINTS[name] ? `<small>${esc(CORR_HINTS[name])}</small>` : ''}</div>` +
       `<div>${bar('전체', valueOf(corr, name), raw)}${bar('같은 달', valueOf(corrYoy, name), yoyColor)}</div>` +
       `<div class="corr-read">${reading(valueOf(corrYoy, name))}</div></div>`).join('');
     $('corrBars').innerHTML =
-      `<div class="corr-legend"><i style="background:${raw}"></i>전체(해마다 반복되는 월별 흐름 포함)<i style="background:${yoyColor}"></i>같은 달끼리 비교(작년 같은 달과의 차이)</div>` + rows +
+      `<div class="corr-row corr-row--head"><div class="corr-legend"><i style="background:${raw}"></i>전체(해마다 반복되는 월별 흐름 포함)<i style="background:${yoyColor}"></i>같은 달끼리 비교(작년 같은 달과의 차이)</div>${readHead}</div>` + rows +
       '<div class="corr-row corr-row--axis"><span></span><div class="corr-axis"><span></span><span><span>−1</span><span>0</span><span>+1</span></span><span></span></div><span></span></div>';
   };
 
@@ -673,27 +677,32 @@
     return lines.map(text => `<p>${text}</p>`).join('');
   };
 
-  // 상관표 아래 설명 (값에서 만듦)
-  //   ① 전체에서는 매우 강하지만 같은 달끼리 비교하면 크게 약해지는 쌍 (장기 추세를 따라 함께 움직인 값일 수 있음)
-  //   ② 표에서 뺀 변수와 이유
-  const corrTableNoteOf = ({ corrLabels, corr, corrYoy }) => {
-    const shown = corrLabels.map((_, i) => i).filter(i => !(corrLabels[i] in CORR_DERIVED));
+  // 전체에서는 매우 강하지만 같은 달끼리 비교하면 크게 약해지는 변수 쌍 중 가장 크게 약해지는 것 (장기 추세를 따라 함께 움직인 값일 수 있음)
+  //   표에서 뺀 변수는 제외. i > j 인 쌍만 보므로 표(아래쪽 삼각형)의 행 = i, 열 = j
+  const corrTopDrop = ({ corrLabels, corr, corrYoy }) => {
     let top = null;
-    if (corr && corrYoy) shown.forEach(i => shown.forEach(j => {
+    if (!corr || !corrYoy) return top;
+    const shown = corrLabels.map((_, i) => i).filter(i => !(corrLabels[i] in CORR_DERIVED));
+    shown.forEach(i => shown.forEach(j => {
       if (j >= i) return;
       const raw = corr[i][j], yoy = corrYoy[i][j];
       if (raw === null || yoy === null || Math.abs(raw) < 0.9) return;
       const drop = Math.abs(raw) - Math.abs(yoy);
       if (drop >= 0.3 && (!top || drop > top.drop)) top = { i, j, raw, yoy, drop };
     }));
-    const lines = [];
-    if (top) lines.push(`${esc(corrLabels[top.i])} ↔ ${esc(corrLabels[top.j])}: 전체 ${corrText(top.raw)}, 같은 달끼리 비교 ${corrText(top.yoy)}. 강해 보이는 값이 같은 달끼리 비교하면 약해지는 것은 두 변수가 장기 추세를 따라 함께 움직였기 때문일 수 있습니다.`);
+    return top;
+  };
+
+  // 읽는 법 패널의 설명 (값에서 만듦): ① 점선 칸 설명 ② 표에서 뺀 변수와 이유
+  const corrTableNoteOf = national => {
+    const { corrLabels } = national, top = corrTopDrop(national), lines = [];
+    if (top) lines.push(`점선 칸: ${esc(corrLabels[top.i])} ↔ ${esc(corrLabels[top.j])} — 전체 ${corrText(top.raw)}, 같은 달끼리 비교 ${corrText(top.yoy)}. 강해 보이는 값이 같은 달끼리 비교하면 약해지는 것은 두 변수가 장기 추세를 따라 함께 움직였기 때문일 수 있습니다.`);
     const dropped = corrLabels.filter(name => name in CORR_DERIVED);
     if (dropped.length) lines.push(`표에서 뺀 변수: ${dropped.map(name => `${esc(name)}(${esc(CORR_DERIVED[name])})`).join(', ')}`);
     return lines.map(text => `<p>${text}</p>`).join('');
   };
 
-  // 상관계수: [요인 비교] 요인별 막대 + 인사이트 / [상관표] 전체와 같은 달끼리 비교 두 표를 나란히 + 설명
+  // 상관계수: [요인 비교] 요인별 막대 + 인사이트 / [상관표] 전체와 같은 달끼리 비교 두 표(왼쪽) + 읽는 법 패널(오른쪽)
   //   히트맵 lower = 대각선과 대칭으로 겹치는 칸을 빼고 아래쪽 삼각형만 표시
   const CORR_VIEWS = [{ id: 'factors', label: '요인 비교' }, { id: 'table', label: '상관표' }];
   const drawCorrelation = ({ national }) => {
@@ -701,13 +710,19 @@
     const keep = national.corrLabels.map((_, i) => i).filter(i => !(national.corrLabels[i] in CORR_DERIVED));
     const labels = keep.map(i => national.corrLabels[i]);
     const subMatrix = matrix => matrix && keep.map(i => keep.map(j => matrix[i][j]));   // 뺀 변수의 행·열을 제거
-    // 표 두 개: 범례는 아래 한 곳에만 두기 위해 두 번째 표의 범례를 #corrScale 로 옮김. 같은 달끼리 비교 값이 없으면 표 하나만
+    // 표 두 개: 범례는 패널 한 곳에만 두기 위해 두 번째 표의 범례를 #corrScale 로 옮김. 같은 달끼리 비교 값이 없으면 표 하나만
     D.renderHeatmap($('heatmapRaw'), labels, subMatrix(national.corr), { lower: true, scale: false, hint: false });
     $('heatmapYoyBox').hidden = !national.corrYoy;
     if (national.corrYoy) {
       D.renderHeatmap($('heatmapYoy'), labels, subMatrix(national.corrYoy), { lower: true, hint: false });
       $('corrScale').appendChild($('heatmapYoy').querySelector('.hm-scale'));
     }
+    // 점선 표시: 설명이 가리키는 칸을 두 표에서 같은 위치에 표시
+    const top = corrTopDrop(national);
+    if (top) ['heatmapRaw', 'heatmapYoy'].forEach(id => {
+      const cell = $(id).querySelector(`.hm-cell[data-r="${keep.indexOf(top.i)}"][data-c="${keep.indexOf(top.j)}"]`);
+      if (cell) cell.classList.add('hm-flag');
+    });
     const render = () => {
       $('corrBars').hidden = view !== 'factors';
       $('corrInsights').hidden = view !== 'factors';
