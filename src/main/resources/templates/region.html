@@ -10,7 +10,7 @@
 <div class="app">
     <aside th:replace="~{fragments/layout :: sidebar('region')}"></aside>
     <main class="main">
-        <header th:replace="~{fragments/layout :: topbar('지역 상세 통계')}"></header>
+        <header th:replace="~{fragments/layout :: topbar('지역 상세 통계','region')}"></header>
         <div class="page">
             <div class="page-head">
                 <h1>지역 상세 통계</h1>
@@ -21,7 +21,7 @@
             <div class="grid-map">
                 <!-- 지역 지도 → #map (시도 경계로 영역 색을 칠함) -->
                 <section class="card map-card">
-                    <div class="card-head"><div><div class="eyebrow">Map</div><h3 class="card-title">지역 선택</h3><div class="card-sub">지도의 지역을 클릭해 선택합니다</div></div></div>
+                    <div class="card-head"><div><!-- <div class="eyebrow">Map</div> --><h3 class="card-title">지역 선택</h3><div class="card-sub">지도의 지역을 클릭해 선택합니다</div></div></div>
                     <div class="card-body"><div id="map"></div></div>
                 </section>
 

@@ -3,8 +3,8 @@
  * (페이지 칸 나누기, 지역 타일맵, 트리맵, 도넛, 히트맵, 시뮬레이션 미리보기)
  * ===================================================================== */
 /* ===== Page grids ===== */
-/* 지도(왼쪽 320~460px) + 내용(나머지) 2단 */
-.grid-map{display:grid;grid-template-columns:minmax(320px,460px) minmax(0,1fr);gap:16px;align-items:start}
+/* 지도(왼쪽) + 내용(나머지) 2단 — body zoom:1.15 를 반영해 지도 카드가 화면에서 잘리지 않도록 폭 축소(460 → 370) */
+.grid-map{display:grid;grid-template-columns:minmax(220px,310px) minmax(0,1fr);gap:16px;align-items:start}
 /* 시뮬레이션 탭처럼 1단으로 쓸 때 */
 .grid-map--single{grid-template-columns:minmax(0,1fr)}
 /* 스크롤해도 지도 카드가 따라다님 */
