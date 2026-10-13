@@ -13,7 +13,7 @@
  *   loadYears()          연도 목록 + 기준 연도를 서버에서 받아옴 (지역 상세 페이지의 연도 버튼)
  *   getRegion/setRegion  선택한 지역 번호 읽기 / 저장
  *   showError()          서버 요청 실패 시 빨간 안내 박스
- *   renderTileMap        지역 타일 지도 그리기
+ *   renderTileMap        지역 지도 그리기 (시도 경계로 색 칠하기 — 함수 이름은 호환 때문에 유지)
  *   kpi / callout        KPI 카드, 설명 박스 HTML 만들기
  *   renderTabs/Pills     탭 / 둥근 버튼 그리기
  *   hbar                 가로 막대 차트
@@ -28,7 +28,7 @@
  *   A && B                  A 가 있을(참일) 때만 B 를 실행
  *   A || B                  A 가 없으면(거짓이면) B 를 사용  → 기본값 줄 때 씀
  *   `글자 ${변수} 글자`      백틱 문자열. 문자열 안에 변수 값을 끼워 넣음
- *   { ...r, col: 1 }        r 의 내용을 그대로 복사하고 col 을 추가
+ *   { ...r, extra: 1 }      r 의 내용을 그대로 복사하고 extra 를 추가
  *   [...배열]               배열 복사
  *   +글자                   글자를 숫자로 바꿈  예) +'3' → 3
  *   const { a, b } = obj    obj.a, obj.b 를 꺼내서 a, b 라는 변수로 만듦
@@ -178,21 +178,19 @@
 
 
   /* =====================================================================
-   * 3. 지역 타일맵에서 각 지역이 놓일 칸
+   * 3. 시도 이름 매핑 (지도 데이터 ↔ DB)
    * ===================================================================== */
 
-  // 지도 격자(가로 5칸 × 세로 7칸)에서 각 지역의 위치 [열(col), 행(row)]. 둘 다 0부터 시작
-  //   예) '서울': [1, 1] → 왼쪽에서 2번째, 위에서 2번째 칸
-  //   데이터가 아니라 "화면 배치"라서 DB 가 아닌 JS 에 둠
-  //   ※ 키(지역 이름)는 API ① 이 돌려주는 name 과 글자가 똑같아야 함
-  //     ('서울특별시' 처럼 다르게 오면 위치를 못 찾아서 지도에 안 나옴)
-  const TILE_POS = {
-    '경기': [1, 0], '강원': [2, 0],
-    '인천': [0, 1], '서울': [1, 1], '충북': [2, 1], '경북': [3, 1],
-    '충남': [0, 2], '세종': [1, 2], '대전': [2, 2], '대구': [3, 2], '울산': [4, 2],
-    '전북': [1, 3], '경남': [3, 3], '부산': [4, 3],
-    '광주': [0, 4], '전남': [1, 4],
-    '제주': [0, 6]
+  // 지도 데이터(static/data/korea-sido.min.json)에 들어 있는 공식 이름을
+  // 서버 API 가 돌려주는 짧은 이름으로 바꿈
+  //   예) '서울특별시' → '서울'  /  '경기도' → '경기'
+  // 바뀌는 쪽은 "지도 쪽 이름"만. API 가 주는 '서울' 은 그대로 씀.
+  const MAP_NAME = {
+    '서울특별시':'서울','부산광역시':'부산','대구광역시':'대구','인천광역시':'인천',
+    '광주광역시':'광주','대전광역시':'대전','울산광역시':'울산','세종특별자치시':'세종',
+    '경기도':'경기','강원도':'강원','충청북도':'충북','충청남도':'충남',
+    '전라북도':'전북','전라남도':'전남','경상북도':'경북','경상남도':'경남',
+    '제주특별자치도':'제주'
   };
 
 
@@ -376,16 +374,11 @@
 
   // loadRegions() : 서버(API ①)에서 지역 목록을 받아와 regions 에 저장
   //   ★ 모든 페이지가 맨 처음에  await D.loadRegions();  로 호출해야 함 (지도·검색이 이 목록을 씀)
-  //   받아온 각 지역에 지도 칸 위치(col, row)를 붙여서 저장함
-  //     받은 것    { id: 1, name: '서울', supply: 2399.5, ... }
-  //     저장한 것  { id: 1, name: '서울', supply: 2399.5, ..., col: 1, row: 1 }
+  //   받아온 그대로 저장:  { id: 1, name: '서울', supply: 2399.5, ... }
   //   서버가 꺼져 있으면 에러가 나므로, 부르는 쪽에서 try-catch 로 감싸야 함
   async function loadRegions() {
     const res = await axios.get(url('api/regions'));
-    regions = res.data.map(r => {
-      const pos = TILE_POS[r.name] || [null, null];   // 이름으로 칸 위치 찾기. 없는 이름이면 [null, null]
-      return { ...r, col: pos[0], row: pos[1] };
-    });
+    regions = res.data;
     return regions;
   }
 
@@ -494,49 +487,95 @@
 
 
   /* =====================================================================
-   * 8. 지역 타일맵 / 지역 정보
+   * 8. 시도 코로플레스 지도 / 지역 정보
    * ===================================================================== */
 
-  // renderTileMap(el, 옵션) : 지역 타일 지도를 그림 (지역마다 네모 한 칸, 값이 클수록 진한 색)
+  // 지도 데이터(static/data/korea-sido.min.json)는 한 번만 받아서 캐시해 둠
+  //   지역을 바꿀 때마다 다시 받으면 느리기 때문
+  let mapGeoPromise = null;
+  function ensureMapData() {
+    if (!mapGeoPromise) mapGeoPromise = axios.get(url('data/korea-sido.min.json')).then(r => r.data);
+    return mapGeoPromise;
+  }
+
+  // 지도 그릴 범위 (좌우로 멀리 떨어진 섬은 지도에서 뺌 - 본토가 더 꽉 차 보이게)
+  //   서쪽 125.6°보다 왼쪽: 백령도·대청도 등 서해 먼 섬 → 제외
+  //   동쪽 130.0°보다 오른쪽: 울릉도·독도 → 제외
+  //   ※ DB·API 쪽은 그대로. 지도에서 '안 그릴' 뿐이고 지역 번호는 유지
+  const MAP_BBOX = { xmin: 125.6, xmax: 130.0, ymin: 33.0, ymax: 38.65 };
+  const inBbox = ([x, y]) => x >= MAP_BBOX.xmin && x <= MAP_BBOX.xmax && y >= MAP_BBOX.ymin && y <= MAP_BBOX.ymax;
+
+  // 작은 섬 제거 기준 (화면에서 몇 px 크기 안 되는데 테두리가 더 두꺼워서 검은 점으로 보이는 섬들)
+  //   면적 단위: 도(°)². 0.03 ≈ 320km² 정도
+  //   유지(0.03 이상): 강화도(0.038), 거제도(0.038), 진도(0.038), 제주(0.179)
+  //   사라짐: 가덕도·안면도·영종도·전남 다도해의 중소형 섬 등 (지역 번호·DB 는 그대로)
+  const MIN_POLY_AREA = 0.03;
+  function polyArea(ring) {
+    let s = 0;
+    for (let i = 0; i < ring.length - 1; i++) s += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+    return Math.abs(s) / 2;
+  }
+
+  // GeoJSON geometry (Polygon / MultiPolygon) 하나를 SVG path 의 d 문자열로 바꿈
+  //   prj : 경도·위도 [lon,lat] 를 뷰박스 좌표 [x,y] 로 바꾸는 함수
+  //   섬(polygon) 단위로 두 가지 필터: bbox 밖 제외, 작은 섬 제외
+  function geoPath(geometry, prj) {
+    const polys = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+    return polys
+      .filter(poly => poly[0].some(inBbox) && polyArea(poly[0]) >= MIN_POLY_AREA)
+      .map(poly => poly.map(ring =>
+        'M' + ring.map(p => { const q = prj(p); return q[0].toFixed(2) + ',' + q[1].toFixed(2); }).join(' L') + ' Z'
+      ).join(' ')).join(' ');
+  }
+
+  // renderTileMap(el, 옵션) : 지역 지도를 그림 (시도 영역에 공급량에 따라 색을 칠함)
+  //   이름이 renderTileMap 인 것은 이전(타일 지도) 코드와 호환을 위해 그대로 둠
   //   el : 지도를 넣을 요소
   //   옵션
   //     valueOf     : 지역 1개를 받아 "색을 정할 값"을 돌려주는 함수   예) x => x.supply
   //     selected    : 지금 선택된 지역 번호 (검은 테두리로 강조)
-  //     onSelect    : 타일을 클릭했을 때 실행할 함수 (클릭한 지역 번호를 넘겨줌)
+  //     onSelect    : 지역을 클릭했을 때 실행할 함수 (클릭한 지역 번호를 넘겨줌)
   //     legendLabel : 아래 색 범례의 제목 (안 넣으면 '연간 공급량')
   //   예) D.renderTileMap($('map'), {
   //         valueOf: x => x.supply,
   //         selected: regionId,
   //         onSelect: id => { regionId = id; render(); }
   //       });
-  function renderTileMap(el, { valueOf, selected, onSelect, legendLabel = '연간 공급량' }) {
-    const R = regions;
-    // 모든 지역의 값 → 그중 최솟값(mn), 최댓값(mx)  (색의 진하기를 정하는 기준)
-    const vals = R.map(valueOf), mn = Math.min(...vals), mx = Math.max(...vals);
+  //   ※ async 함수이지만, 호출하는 쪽에서는 await 없이 그냥 호출해도 됨
+  //      (지도만 조금 늦게 그려질 뿐, 다른 코드와 독립적으로 동작함)
+  async function renderTileMap(el, { valueOf, selected, onSelect, legendLabel = '연간 공급량' }) {
+    const gj = await ensureMapData();
 
-    let html = '<div class="tilemap">';
-    // 격자를 왼쪽 위부터 한 칸씩 돌면서 (세로 7줄 × 가로 5칸)
-    for (let row = 0; row < 7; row++) for (let col = 0; col < 5; col++) {
-      const r = R.find(x => x.row === row && x.col === col);   // 이 칸에 놓일 지역 찾기
-      // 지역이 없는 칸은 빈칸으로 두고 다음 칸으로
-      if (!r) {
-        html += '<span class="tile-empty"></span>';
-        continue;
-      }
-      // v = 이 지역의 값,  t = 0~1 로 바꾼 값 ((값 - 최소) / (최대 - 최소))
-      //   (mx - mn || 1) : 모든 값이 같아서 0 이 되면 1 로 나눔 (0 으로 나누기 방지)
-      const v = valueOf(r), t = (v - mn) / (mx - mn || 1);
-      // 타일 버튼 1개: 선택된 지역이면 is-selected 클래스, data-id 에 지역 번호, 배경·글자색은 t 로 결정
-      html += `<button type="button" class="tile${String(r.id) === String(selected) ? ' is-selected' : ''}" data-id="${r.id}" style="background:${seq(t)};color:${seqInk(t)}" aria-pressed="${String(r.id) === String(selected)}"><b>${r.name}</b><span>${fmt(v)}</span></button>`;
-    }
-    html += '</div>';
-    // 아래 색 범례: 제목, 최솟값, 색 5칸, 최댓값
-    html += `<div class="scale"><span>${legendLabel}</span><span>${fmt(mn)}</span><span class="steps">${SEQ.map(s => `<i style="background:var(${s})"></i>`).join('')}</span><span>${fmt(mx)}</span></div>`;
-    el.innerHTML = html;
+    // 모든 지역의 값 → 최솟값(mn), 최댓값(mx)  (색의 진하기를 정하는 기준)
+    const vals = regions.map(valueOf), mn = Math.min(...vals), mx = Math.max(...vals);
 
-    // HTML 을 넣은 뒤, 타일마다 클릭 이벤트 연결
-    //   b.dataset.id : 버튼의 data-id 값 (항상 글자) → findRegion 으로 찾아 서버가 준 원래 id(숫자)를 넘김
-    el.querySelectorAll('.tile').forEach(b => { b.onclick = () => onSelect(findRegion(b.dataset.id).id); });
+    // 뷰박스 100 × (세로 비율) 크기로 투영. 경도는 왼→오, 위도는 위→아래(SVG 는 y 가 아래)
+    //   bbox 는 위에 하드코딩한 MAP_BBOX 를 그대로 씀 (본토 + 제주. 멀리 섬 제외)
+    const { xmin, xmax, ymin, ymax } = MAP_BBOX;
+    const W = 100, H = 100 * (ymax - ymin) / (xmax - xmin);
+    const prj = ([x, y]) => [(x - xmin) / (xmax - xmin) * W, (ymax - y) / (ymax - ymin) * H];
+
+    // 각 시도 path 만들기
+    //   선택된 지역은 따로 모아 두었다가 맨 마지막에 그림
+    //   (SVG 는 뒤에 그려진 것이 위에 쌓임. 선택 지역의 글로우가 다른 지역에 가려지지 않게 하기 위함)
+    const normal = [], selectedPaths = [];
+    gj.features.forEach(f => {
+      const name = MAP_NAME[f.properties.name];               // 지도 이름 → DB 이름
+      const r = regions.find(x => x.name === name);           // DB 쪽 지역 찾기
+      if (!r) return;                                          // 매칭 안 되면 건너뜀
+      const t = (valueOf(r) - mn) / (mx - mn || 1);
+      const isSel = String(r.id) === String(selected);
+      const d = geoPath(f.geometry, prj);
+      const html = `<path class="prov${isSel ? ' is-selected' : ''}" data-id="${r.id}" d="${d}" style="fill:${seq(t)}" vector-effect="non-scaling-stroke"><title>${name}</title></path>`;
+      (isSel ? selectedPaths : normal).push(html);
+    });
+    const paths = normal.join('') + selectedPaths.join('');
+
+    el.innerHTML = `<svg class="kmap" viewBox="0 0 ${W} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`
+      + `<div class="scale"><span>${legendLabel}</span><span>적음</span><span class="steps">${SEQ.map(s => `<i style="background:var(${s})"></i>`).join('')}</span><span>많음</span></div>`;
+
+    // 각 시도 영역 클릭 → 선택 지역 변경
+    el.querySelectorAll('.prov').forEach(p => { p.onclick = () => onSelect(findRegion(p.dataset.id).id); });
   }
 
   // renderRegionInfo(el, r) : 선택한 지역의 이름과 배지 2개를 그림

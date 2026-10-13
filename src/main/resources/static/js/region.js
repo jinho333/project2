@@ -367,5 +367,28 @@
     D.setRegion(regionId);   // 현재 지역 저장 (주소창에도 ?region= 표시)
     render();                // 첫 화면 그리기
   }
+
+  // ---------------------------------------------------------------
+  // 지도 카드 높이 자동 맞춤
+  // : 왼쪽 "지도 카드"의 하단을, 오른쪽 "월별 공급량 카드"의 하단과 같은 위치가 되게 함
+  // : getBoundingClientRect() 는 화면 좌표(px)를 돌려줌 - 두 좌표의 차이가 지도 카드가 가져야 할 높이
+  // : body 에 zoom 이 걸려 있으면 그 값으로 나눠서 보정(설정하는 height 는 CSS px, 화면상에선 zoom 배수만큼 커지기 때문)
+  // ---------------------------------------------------------------
+  function syncMapCardHeight() {
+    var mapCard = document.querySelector('.map-card');
+    var monthlyCanvas = document.getElementById('monthlyChart');
+    if (!mapCard || !monthlyCanvas) return;
+    var monthlyCard = monthlyCanvas.closest('.card');
+    if (!monthlyCard) return;
+    var z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    var mapTop = mapCard.getBoundingClientRect().top;
+    var monthlyBottom = monthlyCard.getBoundingClientRect().bottom;
+    var h = (monthlyBottom - mapTop) / z;
+    if (h > 0) mapCard.style.height = h + 'px';
+  }
+  // 처음 열릴 때(차트가 다 그려진 뒤) + 창 크기 바뀔 때 다시 맞춤
+  window.addEventListener('load', function() { setTimeout(syncMapCardHeight, 200); });
+  window.addEventListener('resize', syncMapCardHeight);
+
   init();
 })();
