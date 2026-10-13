@@ -4,15 +4,19 @@
  * ===================================================================== */
 /* ===== Page grids ===== */
 /* 지도(왼쪽) + 내용(나머지) 2단 — body zoom:1.15 를 반영해 지도 카드가 화면에서 잘리지 않도록 폭 축소(460 → 370) */
-.grid-map{display:grid;grid-template-columns:minmax(220px,310px) minmax(0,1fr);gap:16px;align-items:start}
+.grid-map{display:grid;grid-template-columns:310px minmax(0,1fr);gap:16px;align-items:start}
 /* 시뮬레이션 탭처럼 1단으로 쓸 때 */
 .grid-map--single{grid-template-columns:minmax(0,1fr)}
-/* 스크롤해도 지도 카드가 따라다님 */
-.map-card{position:sticky;top:80px}
+/* 지도 카드: 스크롤 시 상단 따라옴 + 고정 세로 크기 (region/forecast 공통, window 크기 무관) */
+.map-card{position:sticky;top:calc(var(--topbar-h) + 100px);height:620px;overflow:hidden}
 /* 지도 카드만 안쪽 여백을 30%로 줄여 지도가 박스에 더 꽉 차게 (공통값 16/24/24px → 5/7/7px) */
-.map-card .card-body{padding:5px 7px 7px}
+.map-card .card-body{padding:5px 7px 7px;display:flex;flex-direction:column}
+/* 지도+범례를 묶어 중앙 정렬 + 고정 간격 (두 페이지에서 밑 여백이 동일하게 유지됨) */
+.map-card #map{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:20px;min-height:0}
+.map-card #map .kmap{width:280px;height:456px;max-width:100%;display:block}
+.map-card #map .scale{white-space:nowrap}
 /* 2칸 배치 (한 칸이 320px 보다 좁아지면 자동으로 아래로 내려감) */
-.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;}
 .grid-wide{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
 .grid-corr{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
 .grid-sim{display:grid;grid-template-columns:minmax(280px,320px) minmax(0,1fr);gap:16px;align-items:start}
@@ -26,7 +30,7 @@
 /* 화면 너비 1100px 이하에서는 전부 1단으로 */
 @media (max-width:1100px){
   .grid-map,.grid-wide,.grid-corr,.grid-sim{grid-template-columns:minmax(0,1fr)}
-  .map-card{position:static}
+  .map-card{position:static;height:auto}
 }
 
 /* ===== 시도 코로플레스 지도 ===== */

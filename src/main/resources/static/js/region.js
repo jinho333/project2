@@ -237,11 +237,11 @@
     const bins = stats.tempBins;
 
     // 구간별 막대 색 정하기
-    //   9 이상(따뜻함, 18°C 이상)  → 회색 (난방 수요 거의 없음)
+    //   6 이상(따뜻함, 20°C 이상)  → 회색 (난방 수요 거의 없음)
     //   0~1 (매우 추움)            → 가장 진한 파랑
-    //   2~4 (추움)                 → 중간 파랑
-    //   5~8 (선선함)               → 연한 파랑
-    const binColor = i => (i >= 9 ? C('--stone') : i <= 1 ? C('--seq-5') : i <= 4 ? C('--seq-4') : C('--seq-3'));
+    //   2~3 (추움)                 → 중간 파랑
+    //   4~5 (선선함)               → 연한 파랑
+    const binColor = i => (i >= 6 ? C('--stone') : i <= 1 ? C('--seq-5') : i <= 3 ? C('--seq-4') : C('--seq-3'));
 
     make('temp', $('tempChart'), {
       type: 'bar',
@@ -284,7 +284,7 @@
     $('tempCallout').innerHTML = D.callout(
       'blue',
       `가장 추운 구간(${cold.label}°C)은 가장 따뜻한 구간(${warm.label}°C) 대비 ${fmt(cold.value / Math.max(0.01, warm.value), 1)}배`,
-      '18°C 이상은 난방 수요가 거의 없는 구간(회색)입니다.' + sampleNote
+      '20°C 이상은 난방 수요가 거의 없는 구간(회색)입니다.' + sampleNote
     );
 
 
@@ -333,6 +333,19 @@
 
     // 증가면 '+' 붙여서 표시 (감소는 숫자에 이미 '-'가 있음)
     // 공급량 상관계수는 서버가 지역별로 계산해서 보내줌 (예전에는 0.42 로 고정이었음)
+    // 전년동기 YoY (가장 최근 분기 vs 1년 전 같은 분기)
+    //   예) 2026 Q2 와 2025 Q2 비교 → "26.Q2 기준 전년동기(25.Q2) 대비 X% 증가/감소"
+    //   분기 간격이 4 이므로 pop[-1] 과 pop[-5] 를 비교 (충분히 길 때)
+    const last = pop[pop.length - 1];
+    const yearAgo = pop.length >= 5 ? pop[pop.length - 5] : pop[0];
+    const popYoy = ((last.value - yearAgo.value) / yearAgo.value) * 100;
+    const trend = popYoy > 0 ? '증가' : popYoy < 0 ? '감소' : '변동 없음';
+    $('popCallout').innerHTML = D.callout(
+      'blue',
+      `${last.label} 기준 전년동기(${yearAgo.label}) 대비 ${fmt(Math.abs(popYoy), 2)}% ${trend}`,
+      '분기별 평균 인구로 월별 변동 노이즈를 완화합니다.'
+    );
+
     $('popStats').innerHTML =
       `<div><span>기간 변화 </span><b>${chg >= 0 ? '+' : ''}${fmt(chg, 2)}%</b></div>` +
       `<div><span>공급량 상관 </span><b>${fmt(stats.popCorr, 2)}</b></div>`;
