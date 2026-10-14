@@ -9,7 +9,7 @@
 <body>
 <div class="app">
     <aside th:replace="~{fragments/layout :: sidebar('forecast')}"></aside>
-    <main class="main">
+    <main class="main main--forecast">
         <header th:replace="~{fragments/layout :: topbar('공급 예측','forecast')}"></header>
         <!-- page-head 를 .page 밖(topbar 바로 아래)으로 재배치 → sticky 로 topbar 바로 아래 고정 (region 과 동일 방식) -->
         <section class="page-head page-head--standalone">
