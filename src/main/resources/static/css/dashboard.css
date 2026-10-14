@@ -20,6 +20,19 @@
 .region-name{display:flex;align-items:center;gap:10px;margin-top:2px;flex-wrap:wrap}
 .region-name > span:first-child{font-size:24px;font-weight:700;letter-spacing:-.6px;color:var(--ink);white-space:nowrap}
 .chart{position:relative;width:100%}
+/* Chart.js 는 CSS zoom 을 모른다.
+   body 에 zoom:1.15 가 걸려 있으면 Chart.js 가 박스 크기를 "확대된 픽셀"(183 → 211)로 읽고
+   그 숫자를 캔버스 style 에 그대로 써 넣는데, 그 값이 다시 1.15배 확대되어 캔버스가 박스 밖으로 넘친다.
+   → 캔버스를 박스에 맞춰 절대 배치하고 100% 로 고정해 넘침을 막는다.
+     (가로·세로가 같은 비율로 보정되므로 그래프가 찌그러지지 않는다) */
+.chart > canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important}
+/* 시뮬레이션 결과 그래프.
+   시뮬레이션을 실행하면 위에 KPI 카드, 아래에 설명 박스가 새로 생겨서 세로가 길어진다.
+   그래서 높이를 고정하지 않고 "화면에서 남는 만큼"으로 자동 계산해 한 화면에 들어오게 한다.
+   - body 에 zoom:1.15 가 걸려 있어 100vh 가 1.15배로 커지므로 1.15 로 나눠 준다.
+   - 615px = 그래프를 뺀 나머지(헤더·페이지 여백·KPI·카드 제목·설명 박스)의 높이 합.
+   - clamp(최소, 계산값, 최대) : 화면이 작아도 150px 밑으로는 안 줄고, 커도 280px 를 안 넘는다. */
+.sim-chart{height:clamp(135px, calc(100vh / 1.15 - 615px), 280px)}
 .stat-row{display:flex;gap:24px;font-size:13px;flex-wrap:wrap}
 .stat-row span{color:var(--mute)}
 .stat-row b{color:var(--ink);font-variant-numeric:tabular-nums}
