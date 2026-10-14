@@ -158,7 +158,7 @@
     // D.kpi({...}) 는 카드 1개의 HTML을 만들어주는 공통 함수, join('')으로 이어 붙임
     $('kpis').innerHTML = [
       D.kpi({
-        label: partial ? '연간 공급량 (실적+예측)' : '연간 공급량',
+        label: partial ? '가스 연간 공급량' : '가스 연간 공급량',
         value: fmt(annual),
         unit: '백만㎥',
         delta: yoy,                                             // 증감률 (↑↓ 표시)
@@ -168,11 +168,11 @@
         label: '겨울(12–2월) 비중',
         value: fmt(winter, 1),                                  // 소수 첫째 자리까지
         unit: '%',
-        caption: '연간 공급량 중',
+        caption: '가스 연간 공급량 중',
         accent: 'var(--season-winter)'                          // 겨울 색상으로 강조
       }),
       D.kpi({
-        label: '1인당 공급량',
+        label: '가스 1인당 공급량',
         value: fmt(perCap),
         unit: '㎥',
         caption: `인구 ${fmt(r.pop)}만 명 기준`                  // `...${변수}...` : 문자열 안에 변수 넣기 (템플릿 문자열)
