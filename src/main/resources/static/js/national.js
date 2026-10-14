@@ -966,6 +966,13 @@
     if (worst && best) {
       lines.push(`<b>가장 정확한 지역은 ${esc(best.name)}(${fmt(best.mape, 1)}%), 오차가 가장 큰 지역은 ${esc(worst.name)}(${fmt(worst.mape, 1)}%)입니다.</b> ${overLimit.length ? `기준(${MAPE_LIMIT}%) 이상인 ${overLimit.length}곳은 예측값을 볼 때 여유를 두고 보는 것이 좋습니다.` : `모든 지역이 ${MAPE_LIMIT}% 미만이라 지역별 예측을 믿고 쓸 만한 수준입니다.`}`);
     }
+    // 울산 설명(2026-10-13 분석, 문구는 10-14 임시본): 팀의 자료 처리 결정(값 교체 / 결측 처리 / 그대로 두고 명시)에 맞춰 다시 고칠 것.
+    //   새 모델·자료로 바뀌면 사실과 어긋나므로, 울산이 기준 이상일 때만 보이게 함 → 자료·모델이 바뀌면 이 줄을 지울 것
+    //   근거: 최근 12개월을 맞혀 본 오차 중 2026년 4·5·6월이 +33%·+21%·−14%(예측-실제)로 몰려 있고, 이 3개월을 빼면 울산 MAPE 7.0%.
+    //   6월 공급량(11.397008)이 5월과 완전히 같은 값이라 입력 자료 문제가 의심되며(전체 자료에서 이런 경우는 2건), 6월 전년비가 전국 −9%, 울산 +39%.
+    if (worst && worst.name === '울산' && worst.mape >= MAPE_LIMIT) {
+      lines.push(`<b>울산의 오차는 원본 통계의 이상값 때문일 수 있습니다.</b> 한국도시가스협회 통계월보에서 울산의 2026년 5월과 6월 공급량이 같은 값이고, 오차(${fmt(worst.mape, 1)}%)는 이 값이 포함된 4~6월에 몰려 있습니다. 이 세 달을 제외하면 약 7.0%입니다.`);
+    }
     // 기준 10%의 출처: Lewis, C. D. (1982). Industrial and business forecasting methods: A practical guide to exponential smoothing and curve fitting. London: Butterworth Scientific. (p. 40)
     //   MAPE 해석: 10% 미만 매우 정확 / 10~20% 양호 / 20~50% 보통 / 50% 이상 부정확
     lines.push(`<b>기준 ${MAPE_LIMIT}%는 예측 분야의 대표적인 분류(Lewis, 1982)를 따랐습니다.</b> 오차율 ${MAPE_LIMIT}% 미만은 '매우 정확', 10~20%는 '양호', 20~50%는 '보통', 50% 이상은 '부정확'으로 봅니다. 그중 가장 높은 등급인 '매우 정확'의 경계를 경고 기준으로 삼았습니다.`);
