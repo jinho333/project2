@@ -43,15 +43,17 @@
 
 /* 페이지 맨 아래 데이터 안내 (기간, 기준 연도, 임시값 안내) */
 .data-note{margin:4px 0 0;font-size:12px;line-height:1.6;color:var(--mute)}
+/* 데이터 안내를 줄(li) 목록으로 */
+ul.data-note{padding-left:18px;list-style:disc}
+ul.data-note li+li{margin-top:2px}
 /* 막대 차트 아래 색 설명 */
 .bar-legend{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--mute)}
 .bar-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
 .bar-legend i:not(:first-child){margin-left:10px}
 .bar-legend i.legend-dot{border-radius:50%}
-/* 트리맵 색 기준 토글: 작은 안내 글자를 토글 위에 둠 (토글이 색만 바꾼다는 것을 알려줌) */
+/* 트리맵 색 기준 토글 (눈에 보이는 라벨은 없고 선택지 이름과 부제가 설명함) */
 .metric-switch{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .head-switches{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
-.metric-switch-label{font-size:12px;font-weight:500;color:var(--mute)}
 /* 카드 제목 줄 오른쪽에 배지를 여러 개 나란히 놓을 때 */
 .head-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 
@@ -83,21 +85,32 @@
 .tm-tip{position:absolute;display:none;z-index:5;pointer-events:none;padding:8px 10px;background:var(--surface-dark);color:var(--white);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);font-size:12px;line-height:1.6;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tm-tip b{display:block;font-size:13px;margin-bottom:2px}
 /* 트리맵 색 범례 */
-/* 월별 곡선 범례: 연도 칩을 눌러 선을 켜고 끔 + 빠른 선택 (올해 vs 작년 / 전체) */
+/* 연도별 추이 카드: 왼쪽 차트 + 오른쪽 인사이트 (차트가 줄어들 수 있게 minmax(0,1fr)). 인사이트가 없으면 --solo 로 차트만 */
+.trend-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:32px;align-items:start}
+.trend-layout--solo{grid-template-columns:minmax(0,1fr)}
+.trend-aside .corr-insights{margin-top:0}
+@media (max-width:1100px){.trend-layout{grid-template-columns:minmax(0,1fr);gap:16px}}
+/* 월별 비교 조작(기준 해 / 비교 대상)과 범례 한 줄 */
+.trend-controls{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.trend-key{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:12px;color:var(--mute)}
+.trend-key-item{display:inline-flex;align-items:center;gap:6px}
+.trend-key-item i{display:inline-block;width:12px;height:10px;border-radius:2px}
+.trend-key-item i.is-line{width:16px;height:3px;border-radius:2px}
+.trend-key-item i.is-dot{width:10px;height:10px;border-radius:50%}
+.trend-key-item[data-hl]{cursor:default}
+.trend-key-item[data-hl]:hover{color:var(--ink);font-weight:600}
+.trend-key-hint{color:var(--ash)}
+/* 월별 비교: 범례 영역과 조작 줄 (기준 해 / 비교 대상) */
 .trend-legend{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-/* 빠른 보기 / 연도 선택: 라벨 + 버튼들 한 줄씩 (버튼이 많아 줄이 바뀌어도 라벨은 첫 줄 옆에 그대로) */
+/* 조작 한 줄: 라벨 + 버튼들 (버튼이 많아 줄이 바뀌어도 라벨은 첫 줄 옆에 그대로) */
 .trend-group{display:flex;align-items:flex-start;gap:10px}
 .trend-group-label{flex:none;width:56px;padding-top:7px;font-size:12px;color:var(--mute)}
 .trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:8px}
 /* 버튼 크기: 페이지의 다른 토글(높이 약 35px, 글자 14px)과 비슷하게 (기존 높이 26px·글자 12px 은 월별 보기의 주 조작 요소로는 작았음) */
 .trend-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:13px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
-.trend-chip i{display:inline-block;width:14px;height:4px;border-radius:2px}
 .trend-chip:hover{background:var(--surface-soft)}
-.trend-chip[data-y][aria-pressed="false"]{opacity:.5}
-.trend-chip[data-y][aria-pressed="false"] i{background:var(--ash)!important}
-/* 빠른 보기는 선택되면 진하게 채워 연도 버튼(테두리만 있음)과 구분 */
+/* 선택된 버튼은 진하게 채움 (기준 해 / 비교 대상) */
 .trend-chip--quick[aria-pressed="true"],.trend-chip--quick[aria-pressed="true"]:hover{background:var(--ink);border-color:var(--ink);color:var(--surface-card);font-weight:700}
-.trend-hint{flex-basis:100%;font-size:12px;color:var(--mute)}
 @media (prefers-reduced-motion:reduce){.trend-chip{transition:none}}
 .tm-legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--mute)}
 .tm-legend i{display:inline-block;width:28px;height:8px;border-radius:2px}
@@ -129,6 +142,9 @@
 .dl-row{display:grid;grid-template-columns:10px 1fr auto;column-gap:10px;align-items:center;padding:1px 8px;margin:0 -8px;border-radius:var(--radius-md);transition:background var(--dur-fast),opacity var(--dur-fast)}
 .dl-row b{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
 .dl-name small{display:block;font-size:12px;font-weight:400;color:var(--mute);line-height:1.3}
+/* 공급 비중 아래 작은 글씨 = 인구 비중 (공급 비중과 바로 비교). .dl-hidden = 화면 읽기 도구에만 읽히는 글자 */
+.dl-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.dl-row b small{display:block;font-size:12px;font-weight:400;color:var(--mute);line-height:1.3}
 .donut-legend.has-active .dl-row{opacity:.45}
 .donut-legend.has-active .dl-row.is-active{opacity:1;background:var(--surface-soft)}
 .dl-row.is-active span,.dl-row.is-active b{font-weight:700;color:var(--ink)}
