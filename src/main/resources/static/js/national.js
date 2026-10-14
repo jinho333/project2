@@ -177,20 +177,70 @@
     };
   };
 
-  // KPI 5개: 최신 월(작년 같은 달 대비) / 올해 누계(전년 동기 대비) / 기준 연도 연간 / 기온 민감도 / 예측 오차율
-  //   전년 대비, 전분기 대비는 서버가 계산해서 보내줌. 올해 누계는 진행 중인 연도가 없으면 빠짐(그때는 4개)
-  const drawKpis = ({ national, year, prevYear, total, avgSens, avgMape, overLimit, hasMape, hasSens }) => {
-    const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누계)
+  // 최근 12개월 합계와 직전 12개월 합계 (서버의 월별 줄 national.monthly, 오래된 순). 24개월이 연속으로 없으면 null → 이 카드만 빠짐
+  //   연간(기준 연도) 대신 쓰는 이유: 기준 연도는 반년 묵은 값이라 월·누적과 방향이 엇갈려 보이고, 연도별 추이 카드가 이미 보여줌
+  const rolling12Of = monthly => {
+    if (!monthly || monthly.length < 24) return null;
+    const rows = monthly.slice(-24), pos = m => Number(m.ym.slice(0, 4)) * 12 + Number(m.ym.slice(5));
+    if (!rows.every((m, k) => Number.isFinite(m.supply) && (k === 0 || pos(m) === pos(rows[k - 1]) + 1))) return null;
+    const sum = list => list.reduce((acc, m) => acc + m.supply, 0);
+    const cur = sum(rows.slice(12)), prev = sum(rows.slice(0, 12));
+    const ymText = ym => `${ym.slice(0, 4)}.${Number(ym.slice(5))}`;
+    return { supply: cur, yoy: prev > 0 ? (cur / prev - 1) * 100 : null, from: ymText(rows[12].ym), to: ymText(rows[23].ym) };
+  };
+
+  // KPI 5개 (왼쪽 → 오른쪽): 최근 12개월 / 올해 누적 / 이번 달 / 기온 민감도 / 예측 오차율
+  //   긴 기간 → 짧은 기간 순: 가장 믿을 만한 값을 첫 자리에, 감소폭이 −2 → −4 → −9% 로 커지는 이야기가 되게 하고, 아래 추이 카드(연도별 → 월별)와 같은 흐름
+  //   전년 대비, 전분기 대비는 서버가 계산해서 보내줌. 올해 누적은 진행 중인 연도가 없으면 빠짐(그때는 4개)
+  //   카드를 누르면 해당 카드로 이동: [카드 종류, HTML] → 종류별 도착 카드 id 는 KPI_TARGETS
+  const KPI_TARGETS = { trend: 'trendCard', sens: 'sensCard', acc: 'accCard' };
+  const KPI_TARGET_NAMES = { trend: '연도별 추이', sens: '지역별 기온 민감도', acc: '지역별 예측 오차' };   // 마우스를 올렸을 때 목적지 안내(카드 제목은 보기에 따라 바뀌어 고정 글자를 씀)
+  // 증감 방향 글자: 화살표 아이콘과 색만으로는 화면 읽기 도구가 방향을 알 수 없어서 숨은 글자(.dl-hidden)로 덧붙임
+  const dirText = d => Number.isFinite(d) ? `<span class="dl-hidden">${d >= 0 ? '증가' : '감소'} </span>` : '';
+  const drawKpis = ({ national, avgSens, avgMape, overLimit, hasMape, hasSens }) => {
+    const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누적)
     const latest = latestMonthOf(national.monthly);   // 월별 데이터가 없으면 null → 이 카드만 빠짐
-    $('kpis').innerHTML = [
-      // 최신 월 카드에는 기온 차이를 붙이지 않음: 여름처럼 난방이 적은 달은 기온이 낮아도 공급이 줄어 '기온 때문' 으로 오해할 수 있음
-      latest && D.kpi({ label: `${latest.year}년 ${latest.month}월 가정용 공급량`, value: fmt(latest.supply), unit: '백만㎥', delta: latest.yoy, deltaLabel: '작년 같은 달 대비' }),
-      ytd && D.kpi({ label: `${ytd.year}년 누계 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `전년 동기 대비 · 기온 ${signed(ytd.tempDiff)}°C` }),
-      D.kpi({ label: `전국 연간 공급량 (${year})`, value: fmt(total), unit: '백만㎥', delta: national.supplyYoy, deltaLabel: `${prevYear}년 대비` }),
-      D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%/°C', caption: '1°C 하락 시 평균 월 공급량 대비 증가분 (예측 모델 기준)', accent: 'var(--season-winter)' }),
+    const r12 = rolling12Of(national.monthly);
+    const cards = [
+      ['trend', r12 && D.kpi({ label: '최근 12개월 공급량', value: fmt(r12.supply), unit: '백만㎥', delta: r12.yoy, deltaLabel: `${dirText(r12.yoy)}직전 12개월 대비 · ${r12.from}~${r12.to}` })],
+      ['trend', ytd && D.kpi({ label: `${ytd.year}년 누적 (1~${ytd.month}월)`, value: fmt(ytd.supply), unit: '백만㎥', delta: ytd.supplyYoy, deltaLabel: `${dirText(ytd.supplyYoy)}작년 1~${ytd.month}월 대비${Number.isFinite(ytd.tempDiff) && ytd.tempDiff !== 0 ? ` · 평균기온 ${fmt(Math.abs(ytd.tempDiff), 1)}°C ${ytd.tempDiff > 0 ? '높음' : '낮음'}` : ''}` })],
+      // 이번 달 카드에는 기온 차이를 붙이지 않음: 여름처럼 난방이 적은 달은 기온이 낮아도 공급이 줄어 '기온 때문' 으로 오해할 수 있음
+      ['trend', latest && D.kpi({ label: `${latest.year}년 ${latest.month}월 가정용 공급량`, value: fmt(latest.supply), unit: '백만㎥', delta: latest.yoy, deltaLabel: `${dirText(latest.yoy)}작년 같은 달 대비` })],
+      // 제목 앞 색 네모(accent)는 두지 않음: 5장 중 이 카드만 있어 이유 없이 눈에 띄고, 지역 페이지의 '겨울 비중' 카드 방식을 옮겨 온 것이라 이 페이지에는 맞지 않음
+      // 민감도: 큰 숫자는 '%' 만(단위 %/°C 는 난해), 뜻은 보조 문구가 설명. 실제 기록으로 구한 값(요인 카드, 약 4%)과 계산 방식이 달라 '예측 모델 추정' 이라고 밝힘
+      ['sens', D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%', caption: '기온이 1°C 낮아지면 한 달 평균 공급량이 이만큼 늘어남 (예측 모델 추정)' })],
       // MAPE 는 비율이라 전분기와의 차이는 %p. 기준(MAPE_LIMIT)을 넘은 지역 수를 같은 카드에 함께 보여줌
-      D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: hasMape ? `전분기 대비 · 오차 큰 지역 ${overLimit.length}곳(${MAPE_LIMIT}% 초과)` : '전분기 대비', goodWhen: 'down' })
-    ].filter(Boolean).join('');
+      ['acc', D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: hasMape ? `${dirText(national.mapeDelta)}전분기 대비 · 오차 큰 지역 ${overLimit.length}곳(${MAPE_LIMIT}% 이상)` : '전분기 대비', goodWhen: 'down' })]
+    ].filter(([, html]) => html);
+    $('kpis').innerHTML = cards.map(([, html]) => html).join('');
+    [...$('kpis').children].forEach((el, k) => {   // 카드를 누르거나 Enter 를 누르면 해당 카드로 부드럽게 이동 (동작 줄이기 설정이면 바로)
+      const target = $(KPI_TARGETS[cards[k][0]]);
+      if (!target) return;
+      // 도착한 카드를 잠깐 강조: 스크롤이 끝난 뒤(scrollend)에 켜서 '여기로 왔다' 를 알림. 이미 그 자리라 스크롤이 없으면 scrollend 가 안 오므로 1.5초 뒤에 켬
+      let timer = null;
+      const arrive = () => {
+        clearTimeout(timer);
+        window.removeEventListener('scrollend', arrive);
+        target.classList.add('is-arrived');
+        setTimeout(() => target.classList.remove('is-arrived'), 1500);
+      };
+      const go = () => {
+        target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        clearTimeout(timer);
+        if (!reduceMotion && 'onscrollend' in window) {
+          window.addEventListener('scrollend', arrive, { once: true });
+          timer = setTimeout(arrive, 1500);
+        } else {
+          arrive();
+        }
+      };
+      el.dataset.to = KPI_TARGETS[cards[k][0]];
+      el.title = `${KPI_TARGET_NAMES[cards[k][0]]} 카드로 이동`;
+      el.tabIndex = 0;
+      el.setAttribute('role', 'link');
+      el.onclick = go;
+      el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+    });
   };
 
   // 지역별 공급 현황 (트리맵): 면적은 항상 기준 연도 공급량, 색만 토글(전년 대비 증감률 / 1인당 공급량)로 바뀜
