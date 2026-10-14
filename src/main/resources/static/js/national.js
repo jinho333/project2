@@ -115,6 +115,15 @@
 
   // 지역 클릭 → 지역 상세 페이지 (/region?region=id)
   // 상세 페이지는 공용 지역 목록(D.getRegions)의 id 로 지역을 찾으므로, 전국 API 의 id 도 같은 지역 번호(DB REGION_ID)를 씀
+  // 등장 애니메이션은 페이지를 열었을 때 화면 안에 있는 차트만: 아래쪽 차트는 스크롤해서 볼 때쯤 이미 끝나 있어 의미가 없음.
+  //   조작(토글, 마우스 연동)에 반응하는 애니메이션은 위치와 상관없이 유지. 동작 줄이기 설정이면 모두 끔
+  const animateIn = el => !reduceMotion && el.getBoundingClientRect().top < window.innerHeight && el.getBoundingClientRect().bottom > 0;
+  const quietIfBelow = (el, make) => {   // 화면 밖이면 만드는 동안만 기본 애니메이션을 끔 (공용 D.hbar 는 옵션을 받지 않아서 기본값을 잠깐 바꿈)
+    if (animateIn(el)) return make();
+    const prev = Chart.defaults.animation;
+    Chart.defaults.animation = false;
+    try { return make(); } finally { Chart.defaults.animation = prev; }
+  };
   const goToRegion = id => { location.href = D.url(`region?region=${id}`); };
 
   // 여러 섹션이 같이 쓰는 값을 한 번만 계산해서 섹션 그리기 함수들(drawKpis, drawTreemap ...)에 똑같이 넘겨줌
@@ -367,7 +376,7 @@
       options: {
         cutout: '68%',
         layout: { padding: 10 },                      // 호버로 조각이 튀어나올 자리를 미리 비워 둠 (안 비우면 가장자리가 잘림)
-        animation: reduceMotion ? false : undefined,
+        animation: animateIn($('donut')) ? undefined : false,
         plugins: { tooltip: { enabled: false } },   // 정보는 가운데 글자로 보여주므로 툴팁은 생략
         events: ['mousemove'],                        // 마우스 이탈은 아래 mouseleave 에서 직접 처리 (차트가 따로 지우며 생기는 어긋남을 막음)
         onHover: (e, els) => setActive(els.length ? els[0].index : -1)
@@ -513,6 +522,7 @@
       },
       plugins: [tempStrip, barValues, tempValues],
       options: {
+        animation: animateIn($('trendChart')) ? undefined : false,
         layout: { padding: { top: 8 } },
         interaction: { mode: 'index', intersect: false },   // 한 해에 올리면 공급량과 기온을 함께 보여줌
         scales: {
@@ -971,8 +981,8 @@
     if (hasSens) {
       const sensHigh = C('--seq-5');
       sensItems = bySensitivity.map(r => ({ id: r.id, label: r.name, value: r.sensitivity, color: r.sensitivity > avgSens ? sensHigh : SENS_LOW_COLOR, detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
-      sensChart = D.hbar($('sensChart'), sensItems,
-        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 월 공급량 대비 증가분 (%/°C)', barThickness: 16 });
+      sensChart = quietIfBelow($('sensChart'), () => D.hbar($('sensChart'), sensItems,
+        { ref: avgSens, refLabel: `전국 ${fmt(avgSens, 1)}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 월 공급량 대비 증가분 (%/°C)', barThickness: 16 }));
       $('sensLegend').innerHTML = `<i style="background:${sensHigh}"></i>전국보다 높음<i style="background:${SENS_LOW_COLOR}"></i>전국보다 낮음`;
       $('sensNote').innerHTML = insightBox(sensInsightsOf(bySensitivity, avgSens));
     } else {
@@ -985,8 +995,8 @@
     // 예측 오차를 못 받아오면 기준을 알 수 없어 한 색(--stone)으로 둠
     const mapeOver = C('--red-500'), mapeOk = C('--ash');
     const accItems = byMape.map(r => ({ id: r.id, label: r.name, value: r.mape, color: hasMape ? (r.mape >= MAPE_LIMIT ? mapeOver : mapeOk) : C('--stone'), detail: `공급량 ${fmt(r.supply)} 백만㎥` }));
-    const accChart = D.hbar($('accChart'), accItems,
-      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 오차율 (%)', barThickness: 16 });
+    const accChart = quietIfBelow($('accChart'), () => D.hbar($('accChart'), accItems,
+      { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 오차율 (%)', barThickness: 16 }));
     setLinked = linkRegions([sensChart && { chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }].filter(Boolean));
     $('accLegend').innerHTML = hasMape ? `<i style="background:${mapeOver}"></i>${MAPE_LIMIT}% 이상 (오차 큰 지역)<i style="background:${mapeOk}"></i>${MAPE_LIMIT}% 미만` : '';
     $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>오차 큰 지역 ${overLimit.length}곳` : '';
@@ -1043,27 +1053,26 @@
 
   /* ---------- ④ 시작: 데이터를 받아온 뒤 그리기 ---------- */
 
-  // 실패하면 어느 API 인지 알려주고 멈춤 (D.showError). 둘 다 받아야 그릴 수 있어서 하나씩 차례로 받음
+  // 실패하면 어느 API 인지 알려주고 멈춤 (D.showError). 둘 다 받아야 그리지만 서로 기다릴 필요는 없어서 동시에 요청함
+  //   (지역 목록은 파이썬 예측 서버를 거쳐 느릴 수 있음 → 차례로 받으면 두 시간이 더해짐)
   const init = async () => {
+    // 차트 선명도: common.css 의 body{zoom:1.15} 때문에 캔버스가 실제보다 작게 그려진 뒤 늘어나 흐려짐(예: 739px 로 그려 850px 로 보임)
+    //   → 이 페이지 차트만 해상도를 확대 배율만큼 올림 (공용 Chart.defaults 를 바꾸지만 이 스크립트는 전국 페이지에서만 불림)
+    const pageZoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    Chart.defaults.devicePixelRatio = (window.devicePixelRatio || 1) * pageZoom;
+
     // 데이터를 받아오는 동안 KPI 자리에 빈 카드를 보여줌 (실패하면 지움)
     $('kpis').innerHTML = '<div class="kpi kpi-skeleton" aria-hidden="true"></div>'.repeat(5);
     $('kpis').setAttribute('aria-busy', 'true');
-    let regions, national;
-    try {
-      regions = await D.loadRegions();   // 공용 지역 목록 (GET /api/regions): 이 페이지의 트리맵·도넛·막대와 상단 검색창, 지역 이동이 같이 씀
-    } catch (err) {
+    // 공용 지역 목록 (GET /api/regions): 이 페이지의 트리맵·도넛·막대와 상단 검색창, 지역 이동이 같이 씀 / 전국 요약 (GET /api/national)
+    const [regionsRes, nationalRes] = await Promise.allSettled([D.loadRegions(), axios.get(D.url('api/national'))]);
+    const failed = regionsRes.status === 'rejected' ? [regionsRes.reason, '지역 목록'] : nationalRes.status === 'rejected' ? [nationalRes.reason, '전국 요약'] : null;
+    if (failed) {
       $('kpis').innerHTML = '';
-      D.showError(err, '지역 목록');
+      D.showError(...failed);
       return;
     }
-    try {
-      national = (await axios.get(D.url('api/national'))).data;
-    } catch (err) {
-      $('kpis').innerHTML = '';
-      D.showError(err, '전국 요약');
-      return;
-    }
-    draw(regions, national);
+    draw(regionsRes.value, nationalRes.value.data);
     $('kpis').removeAttribute('aria-busy');
   };
 
