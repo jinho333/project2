@@ -9,7 +9,7 @@
 <body>
 <div class="app">
     <aside th:replace="~{fragments/layout :: sidebar('region')}"></aside>
-    <main class="main">
+    <main class="main main--region">
         <header th:replace="~{fragments/layout :: topbar('지역별 가스 공급량 상세 통계','region')}"></header>
         <!-- page-head 를 .page 밖(topbar 바로 아래)으로 재배치 → 자연 위치가 topbar 바로 아래라 sticky top:56 과 매칭 → 처음부터 고정 -->
         <section class="page-head page-head--standalone">
@@ -60,7 +60,7 @@
                             </div>
                         </section>
                         <section class="card">
-                            <div class="card-head"><div><!-- <div class="eyebrow">Population</div> --><h3 class="card-title">연도별 인구수</h3><div class="card-sub">2021년 1분기 – 2026년 2분기 · 단위: 만 명 · 월별 변동 완화를 위한 분기 평균</div></div></div>
+                            <div class="card-head"><div><!-- <div class="eyebrow">Population</div> --><h3 class="card-title">연도별 분기 인구수</h3><div class="card-sub">2021년 1분기 – 2026년 2분기 · 단위: 만 명 · 월별 변동 완화를 위한 분기 평균</div></div></div>
                             <div class="card-body">
                                 <div class="chart" style="height:220px"><canvas id="popChart"></canvas></div>
                                 <div id="popCallout" class="mt-12"></div>

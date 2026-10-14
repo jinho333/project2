@@ -9,6 +9,10 @@
 .grid-map--single{grid-template-columns:minmax(0,1fr)}
 /* 지도 카드: 스크롤 시 상단 따라옴 + 고정 세로 크기 (region/forecast 공통, window 크기 무관) */
 .map-card{position:sticky;top:calc(var(--topbar-h) + 100px);height:620px;overflow:hidden}
+/* region 전용: height 늘려 범례가 카드 흰 배경 안에 들어오게 (body zoom:1.15 반영) */
+.main--region .map-card{height:800px;overflow:hidden}
+/* region 전용: 지도 세로를 줄여 범례(.scale) 가 들어올 공간 확보 */
+.main--region .map-card #map .kmap{height:380px}
 /* 지도 카드만 안쪽 여백을 30%로 줄여 지도가 박스에 더 꽉 차게 (공통값 16/24/24px → 5/7/7px) */
 .map-card .card-body{padding:5px 7px 7px;display:flex;flex-direction:column}
 /* 지도+범례를 묶어 중앙 정렬 + 고정 간격 (두 페이지에서 밑 여백이 동일하게 유지됨) */
@@ -24,6 +28,8 @@
 .region-name{display:flex;align-items:center;gap:10px;margin-top:2px;flex-wrap:wrap}
 .region-name > span:first-child{font-size:24px;font-weight:700;letter-spacing:-.6px;color:var(--ink);white-space:nowrap}
 .chart{position:relative;width:100%}
+/* region 전용: body zoom:1.15 상쇄 → Chart.js 호버 좌표 어긋남 해결 (다른 페이지 영향 X) */
+.main--region .chart{zoom:calc(1 / 1.15)}
 .stat-row{display:flex;gap:24px;font-size:13px;flex-wrap:wrap}
 .stat-row span{color:var(--mute)}
 .stat-row b{color:var(--ink);font-variant-numeric:tabular-nums}

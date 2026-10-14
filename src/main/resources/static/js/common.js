@@ -571,7 +571,57 @@
     });
     const paths = normal.join('') + selectedPaths.join('');
 
-    el.innerHTML = `<svg class="kmap" viewBox="0 0 ${W} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`
+    // 큰 지역은 지도 내부에, 작은 지역(광역시)은 지도 바깥 서쪽/동쪽 플래그 + leader line 으로 연결
+    const SMALL_WEST = ['서울특별시','인천광역시','세종특별자치시','대전광역시','광주광역시'];
+    const SMALL_EAST = ['대구광역시','울산광역시','부산광역시'];
+    const SMALL_ALL = [...SMALL_WEST, ...SMALL_EAST];
+
+    // 모든 지역 centroid 미리 계산 (leader line 끝점용)
+    const centroids = {};
+    gj.features.forEach(f => {
+      const coords = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      const pts = [];
+      coords.forEach(poly => poly[0].forEach(c => pts.push(prj(c))));
+      centroids[f.properties.name] = [
+        pts.reduce((s, p) => s + p[0], 0) / pts.length,
+        pts.reduce((s, p) => s + p[1], 0) / pts.length
+      ];
+    });
+
+    // 큰 지역: 지도 내부 라벨 (크게)
+    const bigLabels = gj.features
+      .filter(f => !SMALL_ALL.includes(f.properties.name))
+      .map(f => {
+        const name = MAP_NAME[f.properties.name];
+        if (!name) return '';
+        const [cx, cy] = centroids[f.properties.name];
+        return `<text x="${cx.toFixed(2)}" y="${cy.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-size="3.5" font-weight="700" fill="var(--ink)" pointer-events="none">${name}</text>`;
+      }).join('');
+
+    // 플래그 생성: side='west' 면 anchorX 왼쪽, 'east' 면 오른쪽
+    const makeFlag = (rawName, side, anchorX, flagY) => {
+      const name = MAP_NAME[rawName];
+      if (!name || !centroids[rawName]) return '';
+      const [cx, cy] = centroids[rawName];
+      const w = name.length * 2.8 + 2;
+      const h = 4.2;
+      const rectX = side === 'west' ? anchorX - w : anchorX;
+      return `<g pointer-events="none"><line x1="${cx.toFixed(2)}" y1="${cy.toFixed(2)}" x2="${anchorX.toFixed(2)}" y2="${flagY.toFixed(2)}" stroke="#6c6e63" stroke-width="0.3"/><rect x="${rectX.toFixed(2)}" y="${(flagY - h / 2).toFixed(2)}" width="${w.toFixed(2)}" height="${h}" rx="0.6" fill="#ffffff" stroke="#23251d" stroke-width="0.3"/><text x="${(rectX + w / 2).toFixed(2)}" y="${(flagY + 0.4).toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-size="3" font-weight="700" fill="#23251d">${name}</text></g>`;
+    };
+
+    // 서쪽 패널 (왼쪽 바깥, 지도 위~아래로 분배)
+    const westStart = 12, westGap = (H - 24) / Math.max(SMALL_WEST.length - 1, 1);
+    const flagWest = SMALL_WEST.map((n, i) => makeFlag(n, 'west', -3, westStart + i * westGap)).join('');
+
+    // 동쪽 패널 (오른쪽 바깥)
+    const eastStart = 24, eastGap = (H - 48) / Math.max(SMALL_EAST.length - 1, 1);
+    const flagEast = SMALL_EAST.map((n, i) => makeFlag(n, 'east', W + 3, eastStart + i * eastGap)).join('');
+
+    const regionLabels = bigLabels + flagWest + flagEast;
+
+    // viewBox 좌우 확장 (플래그 공간 확보, 지도 자체는 preserveAspectRatio 로 중앙 fit)
+    const PAD = 26;
+    el.innerHTML = `<svg class="kmap" viewBox="${-PAD} 0 ${W + PAD * 2} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${paths}${regionLabels}</svg>`
       + `<div class="scale"><span>${legendLabel}</span><span>적음</span><span class="steps">${SEQ.map(s => `<i style="background:var(${s})"></i>`).join('')}</span><span>많음</span></div>`;
 
     // 각 시도 영역 클릭 → 선택 지역 변경

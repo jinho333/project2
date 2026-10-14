@@ -190,23 +190,26 @@
     // ---------------------------------------------------------------
     $('monthlyTitle').textContent = `${year}년 월별 공급량`;
 
-    // 예측 범례('연한 색 = 예측')는 진행 중인 해(지금은 2026년)일 때만 보여줌
-    $('legendForecast').hidden = !partial;
+    // 진행 중인 해(2026)는 예측(forecast=true) 월의 '값만' null 처리 → 막대는 안 그려지지만
+    // x축 1월~12월 라벨은 모두 유지되어 "연중 어디쯤인지" 즉시 보임
+    // 과거 해(2021~2025)는 모든 월에 실측 값. 예측 막대가 아예 없으므로 범례 '예측'은 항상 숨김
+    const isPartialYear = year > baseYear;
+    $('legendForecast').hidden = true;
 
     make('monthly', $('monthlyChart'), {
       type: 'bar',
       data: {
-        labels: D.MONTHS,                                        // x축: 1월 ~ 12월
+        labels: D.MONTHS,                                                     // x축: 항상 1월~12월
         datasets: [{
-          data: months.map(d => d.value),                        // y축: 월별 공급량
-          // 막대 색: 계절 색상 사용. 예측값이면 '-soft'(연한 색)를 붙임
-          //   예) 1월 실적 → '--season-winter', 11월 예측 → '--season-autumn-soft'
-          backgroundColor: months.map(d => C(`--season-${D.season(d.m)}${d.forecast ? '-soft' : ''}`)),
+          data: months.map(d => (isPartialYear && d.forecast) ? null : d.value),  // 진행 연도 예측 월은 null → 빈 자리
+          backgroundColor: months.map(d => C(`--season-${D.season(d.m)}`)),   // 계절 색상 (예측 없음)
           borderRadius: 3,          // 막대 모서리 둥글게
           maxBarThickness: 48       // 막대 최대 두께
         }]
       },
       options: {
+        // 막대 위가 아니라 세로줄 근처만 호버해도 툴팁이 뜨게 함 (body zoom 과의 좌표 어긋남 해결)
+        interaction: { mode: 'index', intersect: false },
         scales: {
           x: { grid: { display: false } },                                  // 세로 격자선 숨김
           y: { beginAtZero: true, ticks: { callback: v => fmt(v) } }        // y축 0부터, 숫자 포맷 적용
@@ -215,13 +218,14 @@
           // 마우스를 올렸을 때 나오는 말풍선 내용
           tooltip: {
             callbacks: {
-              // 제목: '2025년 1월 · 겨울 · 평균 -2.4°C' (예측이면 ' · 예측' 추가)
+              // 제목: '2025년 1월 · 겨울 · 평균 -2.4°C' (진행 연도 예측 월은 표시 안 함)
               title: it => {
                 const d = months[it[0].dataIndex];
-                return `${year}년 ${d.m + 1}월 · ${D.SEASON_KO[D.season(d.m)]} · 평균 ${fmt(d.temp, 1)}°C${d.forecast ? ' · 예측' : ''}`;
+                if (isPartialYear && d.forecast) return `${year}년 ${d.m + 1}월 · 실측 전`;
+                return `${year}년 ${d.m + 1}월 · ${D.SEASON_KO[D.season(d.m)]} · 평균 ${fmt(d.temp, 1)}°C`;
               },
-              // 내용: '1,234 백만㎥'
-              label: it => `${fmt(it.raw)} 백만㎥`
+              // 내용: '1,234 백만㎥' (null 월은 '-')
+              label: it => it.raw == null ? '실측 전' : `${fmt(it.raw)} 백만㎥`
             }
           }
         }
@@ -254,6 +258,8 @@
         }]
       },
       options: {
+        // 막대 위가 아니라 세로줄 근처만 호버해도 툴팁이 뜨게 함 (body zoom 과의 좌표 어긋남 해결)
+        interaction: { mode: 'index', intersect: false },
         scales: {
           // autoSkip: false → 라벨 12개 전부 표시
           // maxRotation: 45 → 라벨이 좁은 가로폭에서 겹치지 않도록 45° 기울임
@@ -314,16 +320,20 @@
         scales: {
           x: {
             grid: { display: false },
-            // 분기 라벨 22개가 좁은 폭에 몰리면 겹치므로 4개마다(= 1년마다) 한 개만 표시
-            // 어차피 그 "Q1" 지점은 "그 해의 시작" 이라, 라벨은 Q 생략한 '2021' 식 연도로 표시해 가독성 ↑
-            // (툴팁은 pop[i].label 원본 '21.Q1' 그대로 유지되어 분기 정보도 호버 시 보임)
-            ticks: { autoSkip: false, maxRotation: 0, callback: (v, i) => (i % 4 === 0 ? '20' + pop[i].label.slice(0, 2) : '') }
+            // 분기 라벨 22개 모두 세세하게 표시 ('21.1', '21.2', ..., '26.2'). 좁은 폭에 몰리므로 45° 회전으로 겹침 방지
+            ticks: { autoSkip: false, maxRotation: 45, minRotation: 45, callback: (v, i) => pop[i].label }
           },
           // 인구는 변화폭이 작아 0부터 시작하지 않음. 눈금은 정수(만 명) 로 표시해 축 라벨 깔끔하게
           y: { ticks: { callback: v => fmt(v) } }
         },
         plugins: {
-          tooltip: { callbacks: { label: it => `${fmt(it.raw, 1)} 만 명` } }
+          // 호버 시 상단에 분기 라벨 (예: '21.3') + 아래에 "X.X 만 명" 두 줄로 표시
+          tooltip: {
+            callbacks: {
+              title: it => `20${pop[it[0].dataIndex].label.replace('.', ' ')}분기`,  // "2021 3분기"
+              label: it => `${fmt(it.raw, 1)} 만 명`
+            }
+          }
         }
       }
     });

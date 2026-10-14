@@ -284,8 +284,8 @@ public class RegionService {
       double avg = e.getValue()[1] > 0 ? e.getValue()[0] / e.getValue()[1] : 0.0;
 
       PopQDTO dto = new PopQDTO();
-      // '21.Q1' 형식 (연도 뒤 두 자리 + Q + 분기)
-      dto.setLabel(String.format("%02d.Q%d", yr % 100, q));
+      // '21.1' 형식 (연도 뒤 두 자리 + 분기 숫자, Q 생략)
+      dto.setLabel(String.format("%02d.%d", yr % 100, q));
       dto.setValue(StatUtils.round(avg / 10000.0, 1));       // 명 → 만 명
       result.add(dto);
     }
