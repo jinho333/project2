@@ -158,7 +158,7 @@
     // D.kpi({...}) 는 카드 1개의 HTML을 만들어주는 공통 함수, join('')으로 이어 붙임
     $('kpis').innerHTML = [
       D.kpi({
-        label: partial ? '연간 공급량 (실적+예측)' : '연간 공급량',
+        label: partial ? '가스 연간 공급량' : '가스 연간 공급량',
         value: fmt(annual),
         unit: '백만㎥',
         delta: yoy,                                             // 증감률 (↑↓ 표시)
@@ -168,11 +168,11 @@
         label: '겨울(12–2월) 비중',
         value: fmt(winter, 1),                                  // 소수 첫째 자리까지
         unit: '%',
-        caption: '연간 공급량 중',
+        caption: '가스 연간 공급량 중',
         accent: 'var(--season-winter)'                          // 겨울 색상으로 강조
       }),
       D.kpi({
-        label: '1인당 공급량',
+        label: '가스 1인당 공급량',
         value: fmt(perCap),
         unit: '㎥',
         caption: `인구 ${fmt(r.pop)}만 명 기준`                  // `...${변수}...` : 문자열 안에 변수 넣기 (템플릿 문자열)
@@ -190,23 +190,26 @@
     // ---------------------------------------------------------------
     $('monthlyTitle').textContent = `${year}년 월별 공급량`;
 
-    // 예측 범례('연한 색 = 예측')는 진행 중인 해(지금은 2026년)일 때만 보여줌
-    $('legendForecast').hidden = !partial;
+    // 진행 중인 해(2026)는 예측(forecast=true) 월의 '값만' null 처리 → 막대는 안 그려지지만
+    // x축 1월~12월 라벨은 모두 유지되어 "연중 어디쯤인지" 즉시 보임
+    // 과거 해(2021~2025)는 모든 월에 실측 값. 예측 막대가 아예 없으므로 범례 '예측'은 항상 숨김
+    const isPartialYear = year > baseYear;
+    $('legendForecast').hidden = true;
 
     make('monthly', $('monthlyChart'), {
       type: 'bar',
       data: {
-        labels: D.MONTHS,                                        // x축: 1월 ~ 12월
+        labels: D.MONTHS,                                                     // x축: 항상 1월~12월
         datasets: [{
-          data: months.map(d => d.value),                        // y축: 월별 공급량
-          // 막대 색: 계절 색상 사용. 예측값이면 '-soft'(연한 색)를 붙임
-          //   예) 1월 실적 → '--season-winter', 11월 예측 → '--season-autumn-soft'
-          backgroundColor: months.map(d => C(`--season-${D.season(d.m)}${d.forecast ? '-soft' : ''}`)),
+          data: months.map(d => (isPartialYear && d.forecast) ? null : d.value),  // 진행 연도 예측 월은 null → 빈 자리
+          backgroundColor: months.map(d => C(`--season-${D.season(d.m)}`)),   // 계절 색상 (예측 없음)
           borderRadius: 3,          // 막대 모서리 둥글게
           maxBarThickness: 48       // 막대 최대 두께
         }]
       },
       options: {
+        // 막대 위가 아니라 세로줄 근처만 호버해도 툴팁이 뜨게 함 (body zoom 과의 좌표 어긋남 해결)
+        interaction: { mode: 'index', intersect: false },
         scales: {
           x: { grid: { display: false } },                                  // 세로 격자선 숨김
           y: { beginAtZero: true, ticks: { callback: v => fmt(v) } }        // y축 0부터, 숫자 포맷 적용
@@ -215,13 +218,14 @@
           // 마우스를 올렸을 때 나오는 말풍선 내용
           tooltip: {
             callbacks: {
-              // 제목: '2025년 1월 · 겨울 · 평균 -2.4°C' (예측이면 ' · 예측' 추가)
+              // 제목: '2025년 1월 · 겨울 · 평균 -2.4°C' (진행 연도 예측 월은 표시 안 함)
               title: it => {
                 const d = months[it[0].dataIndex];
-                return `${year}년 ${d.m + 1}월 · ${D.SEASON_KO[D.season(d.m)]} · 평균 ${fmt(d.temp, 1)}°C${d.forecast ? ' · 예측' : ''}`;
+                if (isPartialYear && d.forecast) return `${year}년 ${d.m + 1}월 · 실측 전`;
+                return `${year}년 ${d.m + 1}월 · ${D.SEASON_KO[D.season(d.m)]} · 평균 ${fmt(d.temp, 1)}°C`;
               },
-              // 내용: '1,234 백만㎥'
-              label: it => `${fmt(it.raw)} 백만㎥`
+              // 내용: '1,234 백만㎥' (null 월은 '-')
+              label: it => it.raw == null ? '실측 전' : `${fmt(it.raw)} 백만㎥`
             }
           }
         }
@@ -237,11 +241,11 @@
     const bins = stats.tempBins;
 
     // 구간별 막대 색 정하기
-    //   9 이상(따뜻함, 18°C 이상)  → 회색 (난방 수요 거의 없음)
+    //   6 이상(따뜻함, 20°C 이상)  → 회색 (난방 수요 거의 없음)
     //   0~1 (매우 추움)            → 가장 진한 파랑
-    //   2~4 (추움)                 → 중간 파랑
-    //   5~8 (선선함)               → 연한 파랑
-    const binColor = i => (i >= 9 ? C('--stone') : i <= 1 ? C('--seq-5') : i <= 4 ? C('--seq-4') : C('--seq-3'));
+    //   2~3 (추움)                 → 중간 파랑
+    //   4~5 (선선함)               → 연한 파랑
+    const binColor = i => (i >= 6 ? C('--stone') : i <= 1 ? C('--seq-5') : i <= 3 ? C('--seq-4') : C('--seq-3'));
 
     make('temp', $('tempChart'), {
       type: 'bar',
@@ -254,6 +258,8 @@
         }]
       },
       options: {
+        // 막대 위가 아니라 세로줄 근처만 호버해도 툴팁이 뜨게 함 (body zoom 과의 좌표 어긋남 해결)
+        interaction: { mode: 'index', intersect: false },
         scales: {
           // autoSkip: false → 라벨 12개 전부 표시
           // maxRotation: 45 → 라벨이 좁은 가로폭에서 겹치지 않도록 45° 기울임
@@ -284,7 +290,7 @@
     $('tempCallout').innerHTML = D.callout(
       'blue',
       `가장 추운 구간(${cold.label}°C)은 가장 따뜻한 구간(${warm.label}°C) 대비 ${fmt(cold.value / Math.max(0.01, warm.value), 1)}배`,
-      '18°C 이상은 난방 수요가 거의 없는 구간(회색)입니다.' + sampleNote
+      '20°C 이상은 난방 수요가 거의 없는 구간(회색)입니다.' + sampleNote
     );
 
 
@@ -314,16 +320,20 @@
         scales: {
           x: {
             grid: { display: false },
-            // 분기 라벨 22개가 좁은 폭에 몰리면 겹치므로 4개마다(= 1년마다) 한 개만 표시
-            // 어차피 그 "Q1" 지점은 "그 해의 시작" 이라, 라벨은 Q 생략한 '2021' 식 연도로 표시해 가독성 ↑
-            // (툴팁은 pop[i].label 원본 '21.Q1' 그대로 유지되어 분기 정보도 호버 시 보임)
-            ticks: { autoSkip: false, maxRotation: 0, callback: (v, i) => (i % 4 === 0 ? '20' + pop[i].label.slice(0, 2) : '') }
+            // 분기 라벨 22개 모두 세세하게 표시 ('21.1', '21.2', ..., '26.2'). 좁은 폭에 몰리므로 45° 회전으로 겹침 방지
+            ticks: { autoSkip: false, maxRotation: 45, minRotation: 45, callback: (v, i) => pop[i].label }
           },
           // 인구는 변화폭이 작아 0부터 시작하지 않음. 눈금은 정수(만 명) 로 표시해 축 라벨 깔끔하게
           y: { ticks: { callback: v => fmt(v) } }
         },
         plugins: {
-          tooltip: { callbacks: { label: it => `${fmt(it.raw, 1)} 만 명` } }
+          // 호버 시 상단에 분기 라벨 (예: '21.3') + 아래에 "X.X 만 명" 두 줄로 표시
+          tooltip: {
+            callbacks: {
+              title: it => `20${pop[it[0].dataIndex].label.replace('.', ' ')}분기`,  // "2021 3분기"
+              label: it => `${fmt(it.raw, 1)} 만 명`
+            }
+          }
         }
       }
     });
@@ -333,6 +343,19 @@
 
     // 증가면 '+' 붙여서 표시 (감소는 숫자에 이미 '-'가 있음)
     // 공급량 상관계수는 서버가 지역별로 계산해서 보내줌 (예전에는 0.42 로 고정이었음)
+    // 전년동기 YoY (가장 최근 분기 vs 1년 전 같은 분기)
+    //   예) 2026 Q2 와 2025 Q2 비교 → "26.Q2 기준 전년동기(25.Q2) 대비 X% 증가/감소"
+    //   분기 간격이 4 이므로 pop[-1] 과 pop[-5] 를 비교 (충분히 길 때)
+    const last = pop[pop.length - 1];
+    const yearAgo = pop.length >= 5 ? pop[pop.length - 5] : pop[0];
+    const popYoy = ((last.value - yearAgo.value) / yearAgo.value) * 100;
+    const trend = popYoy > 0 ? '증가' : popYoy < 0 ? '감소' : '변동 없음';
+    $('popCallout').innerHTML = D.callout(
+      'blue',
+      `${last.label} 기준 전년동기(${yearAgo.label}) 대비 ${fmt(Math.abs(popYoy), 2)}% ${trend}`,
+      '분기별 평균 인구로 월별 변동 노이즈를 완화합니다.'
+    );
+
     $('popStats').innerHTML =
       `<div><span>기간 변화 </span><b>${chg >= 0 ? '+' : ''}${fmt(chg, 2)}%</b></div>` +
       `<div><span>공급량 상관 </span><b>${fmt(stats.popCorr, 2)}</b></div>`;

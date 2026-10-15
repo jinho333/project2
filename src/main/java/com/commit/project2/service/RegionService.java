@@ -24,11 +24,10 @@ public class RegionService {
   private final RegionMapper regionMapper;  // region 파트 전용 쿼리
   private final RestClient restClient;      // FastAPI 호출용 (지역 목록의 MAPE 를 받아올 때만 사용)
 
-  /* 기온 구간 라벨 — 인덱스 0=가장 추움, 11=가장 따뜻함.
-     region.js 의 bins[0]/bins[11] 가정과 반드시 일치해야 함. */
+  /* 기온 구간 라벨 — 인덱스 0=가장 추움, 7=가장 따뜻함.
+     region.js 의 bins[0]/bins[7] 가정과 반드시 일치해야 함. */
   private static final String[] TEMP_BIN_LABELS = {
-      "<-6", "-6~-3", "-3~0", "0~3", "3~6", "6~9",
-      "9~12", "12~15", "15~18", "18~21", "21~24", "≥24"
+      "<-5", "-5~0", "0~5", "5~10", "10~15", "15~20", "20~25", "≥25"
   };
 
 
@@ -206,16 +205,16 @@ public class RegionService {
   }
 
   /**
-   * 선택 연도 월별 데이터를 3°C 간격 12구간으로 집계.
+   * 선택 연도 월별 데이터를 5°C 간격 8구간으로 집계.
    * 구간 index 결정 → tempBinIndex() 참고.
    * value = (구간에 떨어진 월들의 총 공급량) ÷ (그 월들의 개수)
    *   = 그 구간에 속한 "월평균 공급량" (백만㎥/월)
    * days = 그 구간에 속한 월들의 일수 합 (툴팁 "N일" 표시용 — 구간이 데이터에서 차지하는 "날의 양")
    */
   private List<TempBinDTO> buildTempBins(List<MonthDTO> months, int year) {
-    double[] supplySum   = new double[12];   // 구간별 공급량 합 (백만㎥)
-    int[]    monthsCount = new int[12];      // 구간별 월 수 (월평균 공식의 분모)
-    int[]    daysSum     = new int[12];      // 구간별 일수 합 (툴팁 표시용)
+    double[] supplySum   = new double[8];   // 구간별 공급량 합 (백만㎥)
+    int[]    monthsCount = new int[8];      // 구간별 월 수 (월평균 공식의 분모)
+    int[]    daysSum     = new int[8];      // 구간별 일수 합 (툴팁 표시용)
 
     for (MonthDTO m : months) {
       int idx = tempBinIndex(m.getTemp());
@@ -227,7 +226,7 @@ public class RegionService {
     }
 
     List<TempBinDTO> result = new ArrayList<>(12);
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 8; i++) {
       TempBinDTO bin = new TempBinDTO();
       bin.setLabel(TEMP_BIN_LABELS[i]);
       bin.setDays(daysSum[i]);
@@ -241,20 +240,20 @@ public class RegionService {
   }
 
   /**
-   * 기온(°C) → 구간 인덱스(0~11).
-   *   -∞ ..< -6     → 0 (가장 추움)
-   *   [-6, -3)      → 1
-   *   [-3,  0)      → 2
+   * 기온(°C) → 구간 인덱스(0~7).
+   *   -∞ ..< -5     → 0 (가장 추움)
+   *   [-5,  0)      → 1
+   *   [ 0,  5)      → 2
    *    ...
-   *   [21, 24)      → 10
-   *   24 이상       → 11 (가장 따뜻함)
+   *   [20, 25)      → 6
+   *   25 이상       → 7 (가장 따뜻함)
    */
   private int tempBinIndex(double t) {
-    if (t < -6) return 0;
-    if (t >= 24) return 11;
-    // [-6, 24) 구간을 +6 평행이동해서 [0, 30) 로 만든 뒤 3으로 나누면 0~9
-    // 거기에 +1 → 1~10 범위에 들어옴
-    return (int) ((t + 6) / 3) + 1;
+    if (t < -5) return 0;
+    if (t >= 25) return 7;
+    // [-5, 25) 구간을 +5 평행이동해서 [0, 30) 로 만든 뒤 5로 나누면 0~5
+    // 거기에 +1 → 1~6 범위에 들어옴
+    return (int) ((t + 5) / 5) + 1;
   }
 
   /**
@@ -285,8 +284,8 @@ public class RegionService {
       double avg = e.getValue()[1] > 0 ? e.getValue()[0] / e.getValue()[1] : 0.0;
 
       PopQDTO dto = new PopQDTO();
-      // '21.Q1' 형식 (연도 뒤 두 자리 + Q + 분기)
-      dto.setLabel(String.format("%02d.Q%d", yr % 100, q));
+      // '21.1' 형식 (연도 뒤 두 자리 + 분기 숫자, Q 생략)
+      dto.setLabel(String.format("%02d.%d", yr % 100, q));
       dto.setValue(StatUtils.round(avg / 10000.0, 1));       // 명 → 만 명
       result.add(dto);
     }

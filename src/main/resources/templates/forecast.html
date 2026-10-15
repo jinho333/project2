@@ -9,14 +9,14 @@
 <body>
 <div class="app">
     <aside th:replace="~{fragments/layout :: sidebar('forecast')}"></aside>
-    <main class="main">
+    <main class="main main--forecast">
         <header th:replace="~{fragments/layout :: topbar('공급 예측','forecast')}"></header>
+        <!-- page-head 를 .page 밖(topbar 바로 아래)으로 재배치 → sticky 로 topbar 바로 아래 고정 (region 과 동일 방식) -->
+        <section class="page-head page-head--standalone">
+            <h1>공급 예측</h1>
+            <p>기온·인구 전망에 따른 3·6개월 공급량 예측과 시나리오 시뮬레이션.</p>
+        </section>
         <div class="page">
-            <div class="page-head">
-                <h1>공급 예측</h1>
-                <p>기온·인구 전망에 따른 3·6개월 공급량 예측과 시나리오 시뮬레이션.</p>
-            </div>
-
             <!-- 왼쪽 지도 / 오른쪽 내용. 시뮬레이션 탭에서는 지도를 숨기고 1단으로 바뀜 -->
             <div class="grid-map" id="fcLayout">
                 <section class="card map-card" id="mapCard">

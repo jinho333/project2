@@ -119,12 +119,14 @@
   // seqInk(t) : 위 배경색 위에 올릴 글자색. 배경이 진하면(t ≥ 0.6) 흰색, 연하면 검정
   const seqInk = t => (t >= 0.6 ? '#fff' : 'var(--ink)');
 
-  // divColor(v) : 상관계수(-1 ~ 1)를 색으로 바꿈 (상관계수 표의 칸 색)
-  //   -1 에 가까우면 진한 파랑, 0 은 흰색, +1 에 가까우면 진한 빨강 (7단계)
-  //   예) divColor(-1) → 'var(--div-neg-3)'     divColor(0) → 'var(--div-0)'     divColor(1) → 'var(--div-pos-3)'
-  //   계산: -1~1 을 0~6 번째로 바꿈 → (v + 1) / 2 × 6 을 반올림
-  const DIV = ['--div-neg-3', '--div-neg-2', '--div-neg-1', '--div-0', '--div-pos-1', '--div-pos-2', '--div-pos-3'];
-  const divColor = v => `var(${DIV[Math.round(((Math.max(-1, Math.min(1, v)) + 1) / 2) * 6)]})`;
+  // heatColor(v) : 상관계수의 크기(|r|)를 파랑 한 가지의 진하기로 바꿈 (상관계수 표의 칸 색)
+  //   방향(+/−)은 색이 아니라 숫자의 부호로 읽음. 여러 색을 섞으면 화면이 산만해 보여 한 색만 씀
+  //   단계: |r| 0.1 미만 / 0.3 미만 / 0.5 미만 / 0.7 미만 / 그 이상 (5단계)
+  //   --seq-4 는 흰 글자(3.8)도 먹색 글자(4.1)도 대비가 4.5 에 못 미쳐서 건너뜀
+  const HEAT = ['--seq-0', '--seq-1', '--seq-2', '--seq-3', '--seq-5'];
+  const heatStep = v => { const a = Math.abs(v); return a < 0.1 ? 0 : a < 0.3 ? 1 : a < 0.5 ? 2 : a < 0.7 ? 3 : 4; };
+  const heatColor = v => `var(${HEAT[heatStep(v)]})`;
+  const signedR = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2);   // +0.14 / −0.96
 
   // debounce(fn, ms) : fn 이 짧은 시간에 여러 번 불려도 "마지막 한 번만" 실행하게 만든 새 함수를 돌려줌
   //   쓰는 곳: 창 크기를 조절하는 동안 계속 다시 그리지 않고, 멈춘 뒤 ms 밀리초가 지나면 한 번만 그림
@@ -586,11 +588,178 @@
     });
     const paths = normal.join('') + selectedPaths.join('');
 
-    el.innerHTML = `<svg class="kmap" viewBox="0 0 ${W} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`
+    // 큰 지역은 지도 내부에, 작은 지역(광역시)은 지도 바깥 서쪽/동쪽 플래그 + leader line 으로 연결
+    const SMALL_WEST = ['서울특별시','인천광역시','세종특별자치시','대전광역시','광주광역시'];
+    const SMALL_EAST = ['대구광역시','울산광역시','부산광역시'];
+    const SMALL_ALL = [...SMALL_WEST, ...SMALL_EAST];
+
+    // 모든 지역 centroid 미리 계산 (leader line 끝점용)
+    const centroids = {};
+    gj.features.forEach(f => {
+      const coords = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      const pts = [];
+      coords.forEach(poly => poly[0].forEach(c => pts.push(prj(c))));
+      centroids[f.properties.name] = [
+        pts.reduce((s, p) => s + p[0], 0) / pts.length,
+        pts.reduce((s, p) => s + p[1], 0) / pts.length
+      ];
+    });
+
+    // 작은 지역의 점 위치 = 지역 안쪽 점. 꼭짓점 평균(centroid)은 섬이 많은 인천처럼 바다로 밀려나므로
+    //   가장 큰 덩어리의 외곽선 안에서 경계선과 가장 멀리 떨어진 점을 격자로 찾음
+    const mainRing = geom => {
+      const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+      let ring = null, bestArea = 0;
+      polys.forEach(p => {
+        const rg = p[0].map(prj);
+        let s = 0;
+        for (let i = 0, j = rg.length - 1; i < rg.length; j = i++) s += rg[j][0] * rg[i][1] - rg[i][0] * rg[j][1];
+        if (Math.abs(s) > bestArea) { bestArea = Math.abs(s); ring = rg; }
+      });
+      return ring;
+    };
+    const inRing = (ring, x, y) => {
+      let c = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+      }
+      return c;
+    };
+    const interiorPoint = geom => {
+      const ring = mainRing(geom);
+      const inside = (x, y) => inRing(ring, x, y);
+      const edgeDist = (x, y) => {
+        let m = Infinity;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const [ax, ay] = ring[j], [bx, by] = ring[i];
+          const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+          m = Math.min(m, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
+        }
+        return m;
+      };
+      const xs = ring.map(p => p[0]), ys = ring.map(p => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      let best = [(x0 + x1) / 2, (y0 + y1) / 2], bestD = -1;
+      const N = 40;
+      for (let a = 0; a <= N; a++) for (let b = 0; b <= N; b++) {
+        const x = x0 + ((x1 - x0) * a) / N, y = y0 + ((y1 - y0) * b) / N;
+        if (!inside(x, y)) continue;
+        const d = edgeDist(x, y);
+        if (d > bestD) { bestD = d; best = [x, y]; }
+      }
+      return best;
+    };
+    const anchors = {};
+    gj.features.forEach(f => { if (SMALL_ALL.includes(f.properties.name)) anchors[f.properties.name] = interiorPoint(f.geometry); });
+
+    // 플래그(알약 모양 이름표) 크기
+    const FLAG_H = 6, FLAG_FONT = 4;
+
+    // 한쪽 패널의 이름표 높이 정하기: 지역 중심 높이를 따라가되(선이 거의 수평) 서로 겹치지 않게 최소 간격을 띄움
+    const placeFlags = rawNames => {
+      const gap = FLAG_H + 2;
+      const items = rawNames.filter(n => anchors[n]).sort((a, b) => anchors[a][1] - anchors[b][1]);
+      const ys = items.map(n => Math.max(FLAG_H / 2 + 1, anchors[n][1]));
+      for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + gap);
+      const bottom = H - FLAG_H / 2 - 1;
+      for (let i = ys.length - 1; i >= 0; i--) {                // 아래로 넘치면 위로 밀어 올림
+        ys[i] = Math.min(ys[i], i === ys.length - 1 ? bottom : ys[i + 1] - gap);
+      }
+      return items.map((n, i) => ({ n, y: ys[i] }));
+    };
+    const westPlaced = placeFlags(SMALL_WEST), eastPlaced = placeFlags(SMALL_EAST);
+
+    // 큰 지역 라벨이 피해야 할 것: 작은 지역의 점, 점에서 이름표로 가는 선, 작은 지역 영역 자체
+    const dotList = Object.values(anchors);
+    const segList = [
+      ...westPlaced.map(p => [anchors[p.n], [-2, p.y]]),
+      ...eastPlaced.map(p => [anchors[p.n], [W + 2, p.y]])
+    ];
+    const smallRings = gj.features.filter(f => SMALL_ALL.includes(f.properties.name)).map(f => mainRing(f.geometry));
+    const LABEL_FONT = 4.2;
+    const labelHits = (x, y, name) => {
+      const hw = (name.length * LABEL_FONT) / 2 + 1, hh = LABEL_FONT / 2 + 0.6, m = 1.2;   // 글자 상자 + 여유
+      const inBox = (px, py) => px >= x - hw - m && px <= x + hw + m && py >= y - hh - m && py <= y + hh + m;
+      if (dotList.some(d => inBox(d[0], d[1]))) return true;
+      for (const [a, b] of segList) {
+        for (let t = 0; t <= 1; t += 0.02) if (inBox(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)) return true;
+      }
+      const pts = [[x, y], [x - hw, y - hh], [x + hw, y - hh], [x - hw, y + hh], [x + hw, y + hh]];
+      return smallRings.some(rg => pts.some(([px, py]) => inRing(rg, px, py)));
+    };
+    // 겹치지 않으면 꼭짓점 평균 위치 그대로, 겹치면 자기 지역 안에서 가장 가까운 빈자리
+    const labelSpot = (f, name) => {
+      const [bx, by] = centroids[f.properties.name];
+      if (!labelHits(bx, by, name)) return [bx, by];
+      const ring = mainRing(f.geometry);
+      const hw = (name.length * LABEL_FONT) / 2 + 1, hh = LABEL_FONT / 2 + 0.6;
+      let best = [bx, by], bestD = Infinity;
+      for (let dx = -20; dx <= 20; dx += 0.5) for (let dy = -20; dy <= 20; dy += 0.5) {
+        const x = bx + dx, y = by + dy, d = Math.hypot(dx, dy);
+        if (d >= bestD) continue;
+        const corners = [[x, y], [x - hw, y - hh], [x + hw, y - hh], [x - hw, y + hh], [x + hw, y + hh]];
+        if (!corners.every(([px, py]) => inRing(ring, px, py))) continue;   // 자기 지역 밖으로 나가지 않게
+        if (labelHits(x, y, name)) continue;
+        best = [x, y]; bestD = d;
+      }
+      return best;
+    };
+
+    // 지역별 라벨 미세 조정 [오른쪽(+), 아래(+)] — 지도 단위(viewBox 폭 100 기준)
+    //   글자 상자가 자기 지역 밖(서울 등)으로 나가지 않는 값으로 확인한 것
+    const LABEL_NUDGE = { '경기': [3, 2] };
+
+    // 큰 지역: 지도 내부 라벨. 배경색이 진하면(t ≥ 0.6) 흰 글자 (seqInk), 연하면 검정
+    const bigLabels = gj.features
+      .filter(f => !SMALL_ALL.includes(f.properties.name))
+      .map(f => {
+        const name = MAP_NAME[f.properties.name];
+        if (!name) return '';
+        const r = regions.find(x => x.name === name);
+        const ink = r ? seqInk((valueOf(r) - mn) / (mx - mn || 1)) : 'var(--ink)';
+        const [sx, sy] = labelSpot(f, name);
+        const [nx, ny] = LABEL_NUDGE[name] || [0, 0];
+        const cx = sx + nx, cy = sy + ny;
+        return `<text x="${cx.toFixed(2)}" y="${cy.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-size="${LABEL_FONT}" font-weight="700" fill="${ink}" pointer-events="none">${name}</text>`;
+      }).join('');
+
+    // 플래그: 지도 바깥에 두고, 지역 안쪽 점과 짧은 선으로 연결
+    //   side='west' 면 anchorX 가 오른쪽 끝(이름표가 왼쪽으로), 'east' 면 anchorX 가 왼쪽 끝
+    const makeFlag = (rawName, side, anchorX, flagY) => {
+      const name = MAP_NAME[rawName];
+      const r = regions.find(x => x.name === name);
+      if (!name || !anchors[rawName] || !r) return '';
+      const [cx, cy] = anchors[rawName];
+      const w = name.length * FLAG_FONT + 3.6;
+      const rectX = side === 'west' ? anchorX - w : anchorX;
+      const isSel = String(r.id) === String(selected);
+      // 이름표(g.flag)는 클릭 가능 (지도 영역을 누른 것과 같음). 선·점은 클릭을 막지 않게 pointer-events 끔
+      return `<g class="flag${isSel ? ' is-selected' : ''}" data-id="${r.id}" role="button" tabindex="0" aria-label="${name} 선택">`
+        + `<line pointer-events="none" x1="${cx.toFixed(2)}" y1="${cy.toFixed(2)}" x2="${anchorX.toFixed(2)}" y2="${flagY.toFixed(2)}" stroke="#23251d" stroke-opacity="0.55" stroke-width="0.35"/>`
+        + `<circle pointer-events="none" cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="0.9" fill="#23251d" stroke="#fff" stroke-width="0.3"/>`
+        + `<rect x="${rectX.toFixed(2)}" y="${(flagY - FLAG_H / 2).toFixed(2)}" width="${w.toFixed(2)}" height="${FLAG_H}" rx="${FLAG_H / 2}" fill="#ffffff" stroke="#23251d" stroke-width="0.35"/>`
+        + `<text pointer-events="none" x="${(rectX + w / 2).toFixed(2)}" y="${(flagY + 0.3).toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-size="${FLAG_FONT}" font-weight="700" fill="#23251d">${name}</text></g>`;
+    };
+    const flagWest = westPlaced.map(p => makeFlag(p.n, 'west', -2, p.y)).join('');       // 서쪽(왼쪽 바깥)
+    const flagEast = eastPlaced.map(p => makeFlag(p.n, 'east', W + 2, p.y)).join('');    // 동쪽(오른쪽 바깥)
+
+    const regionLabels = bigLabels + flagWest + flagEast;
+
+    // viewBox 좌우 확장 (플래그 공간 확보, 지도 자체는 preserveAspectRatio 로 중앙 fit)
+    const PAD = 14;
+    el.innerHTML = `<svg class="kmap" viewBox="${-PAD} 0 ${W + PAD * 2} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${paths}${regionLabels}</svg>`
       + `<div class="scale"><span>${legendLabel}</span><span>적음</span><span class="steps">${SEQ.map(s => `<i style="background:var(${s})"></i>`).join('')}</span><span>많음</span></div>`;
 
     // 각 시도 영역 클릭 → 선택 지역 변경
+    //   이름표(.flag)도 같은 동작: 클릭, 또는 키보드 Enter / Space
     el.querySelectorAll('.prov').forEach(p => { p.onclick = () => onSelect(findRegion(p.dataset.id).id); });
+    el.querySelectorAll('.flag').forEach(g => {
+      const pick = () => onSelect(findRegion(g.dataset.id).id);
+      g.onclick = pick;
+      g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    });
   }
 
   // renderRegionInfo(el, r) : 선택한 지역의 이름과 배지 2개를 그림
@@ -802,10 +971,12 @@
   //   labels : 변수 이름 배열              예) ['공급량', '평균기온', '난방도일', '인구', '세대수']
   //   M      : 상관계수 2차원 배열          M[r][c] = labels[r] 과 labels[c] 의 상관계수
   //   옵션 lower : true 면 아래쪽 삼각형만 그림
+  //   옵션 scale : false 면 표 아래 색 범례를 그리지 않음 (표를 여러 개 놓고 범례를 따로 둘 때)
+  //   옵션 hint  : false 면 마우스를 올렸을 때 나오는 설명 줄을 그리지 않음 (이름 굵게 표시는 그대로)
   //     (대각선은 자기 자신이라 항상 1.00 이고, 위쪽 삼각형은 아래쪽과 같은 값이라 생략)
-  //   칸 색은 divColor, 글자색은 아주 진한 칸(절댓값 0.83 이상)만 흰색
+  //   칸 색은 heatColor(상관의 크기를 파랑 한 가지의 진하기로), 글자색은 가장 진한 칸만 흰색. 방향은 숫자의 부호(+/−)로 읽음
   //   칸에 마우스를 올리면 그 행·열 이름이 굵어지고, 표 아래 한 줄에 '매우 강한 양의 상관' 같은 설명이 나옴
-  function renderHeatmap(el, labels, M, { lower = false } = {}) {
+  function renderHeatmap(el, labels, M, { lower = false, scale = true, hint = true } = {}) {
     const all = labels.map((_, i) => i);             // [0, 1, 2, ...]  변수 번호 목록 (_ 는 안 쓰는 값이라는 표시)
     // lower 면 행에서는 첫 변수를, 열에서는 마지막 변수를 뺌 (그 줄은 전부 빈칸이 되기 때문)
     const rowIdx = lower ? all.slice(1) : all;       // slice(1)     : 첫 번째를 뺀 나머지
@@ -832,14 +1003,14 @@
           return;
         }
         // 칸 1개: 배경색은 값에 따라, 글자는 소수 2자리
-        h += `<div class="hm-cell" data-r="${r}" data-c="${c}" aria-label="${labels[r]} 와 ${labels[c]}: ${v.toFixed(2)}" style="background:${divColor(v)};color:${Math.abs(v) >= 0.83 ? '#fff' : 'var(--ink)'}">${v.toFixed(2)}</div>`;
+        h += `<div class="hm-cell" data-r="${r}" data-c="${c}" aria-label="${labels[r]} 와 ${labels[c]}: ${v.toFixed(2)}" style="background:${heatColor(v)};color:${heatStep(v) === 4 ? '#fff' : 'var(--ink)'}">${signedR(v)}</div>`;
       });
     });
     h += '</div>';
     // 표 아래 색 범례: −1 [색 7칸] +1
-    h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 빨강 = 같이 증가, 파랑 = 반대로 움직임</span></div>`;
+    if (scale) h += `<div class="hm-scale"><span>약함</span>${HEAT.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>강함</span><span class="hm-scale-note">진할수록 강한 상관 · 방향은 숫자의 + / −</span></div>`;
     // 설명이 나올 한 줄 (처음에는 안내 문구)
-    h += `<div class="hm-readout">${HINT}</div>`;
+    if (hint) h += `<div class="hm-readout">${HINT}</div>`;
     el.innerHTML = h;
 
     const readout = el.querySelector('.hm-readout');
@@ -855,12 +1026,12 @@
       // 마우스가 들어오면: 이름 굵게 + 아래 줄에 설명
       cell.onmouseenter = () => {
         mark(r, c, true);
-        readout.innerHTML = `<b>${labels[r]} ↔ ${labels[c]}</b> r = ${v.toFixed(2)} · ${corrStrength(v)}`;
+        if (readout) readout.innerHTML = `<b>${labels[r]} ↔ ${labels[c]}</b> r = ${v.toFixed(2)} · ${corrStrength(v)}`;
       };
       // 마우스가 나가면: 원래대로
       cell.onmouseleave = () => {
         mark(r, c, false);
-        readout.textContent = HINT;
+        if (readout) readout.textContent = HINT;
       };
     });
   }
@@ -903,7 +1074,7 @@
   //   ※ 이 파일에 함수를 새로 만들었으면 여기에도 이름을 추가해야 다른 파일에서 보임
   //   { C, fmt } 는 { C: C, fmt: fmt } 를 줄여 쓴 것
   window.Dash = {
-    C, fmt, seq, seqInk, divColor, debounce, icons, hbar,
+    C, fmt, seq, seqInk, heatColor, debounce, icons, hbar,
     MONTHS, season, SEASON_KO, monthTemp,
     url, loadRegions, loadYears, getRegions, findRegion, getRegion, setRegion, showError, clearError,
     renderTileMap, renderRegionInfo, kpi, renderTabs, renderPills, callout, renderTreemap, renderHeatmap
