@@ -36,7 +36,7 @@ button,input,select{font-family:inherit}
 .topbar{position:sticky;top:0;z-index:10;height:var(--topbar-h);display:flex;align-items:center;gap:24px;padding:0 5%;background:#0f3b3a;border-bottom:1px solid #1a4847;color:#ffffff}
 /* 로고 (좌측) */
 .topbar-brand{display:inline-flex;align-items:center;gap:10px;font-size:15px;font-weight:700;color:#ffffff;letter-spacing:-.2px;white-space:nowrap}
-.topbar-brand .brand-logo{height:34px;width:auto;display:block}
+.topbar-brand .brand-logo{height:50px;width:auto;display:block}
 /* 네비게이션 메뉴 영역 (가로) */
 .topbar-nav{display:flex;align-items:center;gap:8px}
 /* 상단 바 오른쪽 안내 박스(데이터 기간 등) — 검색창과 같은 투명 느낌 */
@@ -62,6 +62,8 @@ button,input,select{font-family:inherit}
 /* 본문 — 좌우 여백 10% 로 가운데 정렬, max-width 제거(오른쪽 쏠림 방지) */
 .page{padding:24px 5% 48px;width:100%}
 .page-head{margin-bottom:20px}
+/* region 전용: page-head 를 .page 밖에 두고 sticky 로 topbar 바로 아래에 고정 */
+.page-head.page-head--standalone{position:sticky;top:var(--topbar-h);background:var(--canvas);padding:16px 5% 20px;margin:0;z-index:20}
 .page-head h1{font-size:24px;font-weight:700;letter-spacing:-.6px;line-height:1.33}
 .page-head p{margin:2px 0 0;font-size:14px;color:var(--mute)}
 
@@ -74,7 +76,7 @@ button,input,select{font-family:inherit}
 .card-title{font-size:18px;font-weight:600;line-height:1.4;color:var(--ink)}
 .card-sub{font-size:13px;color:var(--mute);margin-top:2px}
 .card-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.card-body{padding:16px 24px 24px;flex:1;min-width:0}
+.card-body{padding:16px 24px 24px;flex:1;min-width:0;}
 .card-body--flush{padding:16px 0 0}
 .card-foot{border-top:1px solid var(--hairline-soft);padding:12px 24px;font-size:13px;color:var(--mute)}
 

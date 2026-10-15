@@ -573,11 +573,178 @@
     });
     const paths = normal.join('') + selectedPaths.join('');
 
-    el.innerHTML = `<svg class="kmap" viewBox="0 0 ${W} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`
+    // 큰 지역은 지도 내부에, 작은 지역(광역시)은 지도 바깥 서쪽/동쪽 플래그 + leader line 으로 연결
+    const SMALL_WEST = ['서울특별시','인천광역시','세종특별자치시','대전광역시','광주광역시'];
+    const SMALL_EAST = ['대구광역시','울산광역시','부산광역시'];
+    const SMALL_ALL = [...SMALL_WEST, ...SMALL_EAST];
+
+    // 모든 지역 centroid 미리 계산 (leader line 끝점용)
+    const centroids = {};
+    gj.features.forEach(f => {
+      const coords = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      const pts = [];
+      coords.forEach(poly => poly[0].forEach(c => pts.push(prj(c))));
+      centroids[f.properties.name] = [
+        pts.reduce((s, p) => s + p[0], 0) / pts.length,
+        pts.reduce((s, p) => s + p[1], 0) / pts.length
+      ];
+    });
+
+    // 작은 지역의 점 위치 = 지역 안쪽 점. 꼭짓점 평균(centroid)은 섬이 많은 인천처럼 바다로 밀려나므로
+    //   가장 큰 덩어리의 외곽선 안에서 경계선과 가장 멀리 떨어진 점을 격자로 찾음
+    const mainRing = geom => {
+      const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+      let ring = null, bestArea = 0;
+      polys.forEach(p => {
+        const rg = p[0].map(prj);
+        let s = 0;
+        for (let i = 0, j = rg.length - 1; i < rg.length; j = i++) s += rg[j][0] * rg[i][1] - rg[i][0] * rg[j][1];
+        if (Math.abs(s) > bestArea) { bestArea = Math.abs(s); ring = rg; }
+      });
+      return ring;
+    };
+    const inRing = (ring, x, y) => {
+      let c = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+      }
+      return c;
+    };
+    const interiorPoint = geom => {
+      const ring = mainRing(geom);
+      const inside = (x, y) => inRing(ring, x, y);
+      const edgeDist = (x, y) => {
+        let m = Infinity;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const [ax, ay] = ring[j], [bx, by] = ring[i];
+          const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+          m = Math.min(m, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
+        }
+        return m;
+      };
+      const xs = ring.map(p => p[0]), ys = ring.map(p => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      let best = [(x0 + x1) / 2, (y0 + y1) / 2], bestD = -1;
+      const N = 40;
+      for (let a = 0; a <= N; a++) for (let b = 0; b <= N; b++) {
+        const x = x0 + ((x1 - x0) * a) / N, y = y0 + ((y1 - y0) * b) / N;
+        if (!inside(x, y)) continue;
+        const d = edgeDist(x, y);
+        if (d > bestD) { bestD = d; best = [x, y]; }
+      }
+      return best;
+    };
+    const anchors = {};
+    gj.features.forEach(f => { if (SMALL_ALL.includes(f.properties.name)) anchors[f.properties.name] = interiorPoint(f.geometry); });
+
+    // 플래그(알약 모양 이름표) 크기
+    const FLAG_H = 6, FLAG_FONT = 4;
+
+    // 한쪽 패널의 이름표 높이 정하기: 지역 중심 높이를 따라가되(선이 거의 수평) 서로 겹치지 않게 최소 간격을 띄움
+    const placeFlags = rawNames => {
+      const gap = FLAG_H + 2;
+      const items = rawNames.filter(n => anchors[n]).sort((a, b) => anchors[a][1] - anchors[b][1]);
+      const ys = items.map(n => Math.max(FLAG_H / 2 + 1, anchors[n][1]));
+      for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + gap);
+      const bottom = H - FLAG_H / 2 - 1;
+      for (let i = ys.length - 1; i >= 0; i--) {                // 아래로 넘치면 위로 밀어 올림
+        ys[i] = Math.min(ys[i], i === ys.length - 1 ? bottom : ys[i + 1] - gap);
+      }
+      return items.map((n, i) => ({ n, y: ys[i] }));
+    };
+    const westPlaced = placeFlags(SMALL_WEST), eastPlaced = placeFlags(SMALL_EAST);
+
+    // 큰 지역 라벨이 피해야 할 것: 작은 지역의 점, 점에서 이름표로 가는 선, 작은 지역 영역 자체
+    const dotList = Object.values(anchors);
+    const segList = [
+      ...westPlaced.map(p => [anchors[p.n], [-2, p.y]]),
+      ...eastPlaced.map(p => [anchors[p.n], [W + 2, p.y]])
+    ];
+    const smallRings = gj.features.filter(f => SMALL_ALL.includes(f.properties.name)).map(f => mainRing(f.geometry));
+    const LABEL_FONT = 4.2;
+    const labelHits = (x, y, name) => {
+      const hw = (name.length * LABEL_FONT) / 2 + 1, hh = LABEL_FONT / 2 + 0.6, m = 1.2;   // 글자 상자 + 여유
+      const inBox = (px, py) => px >= x - hw - m && px <= x + hw + m && py >= y - hh - m && py <= y + hh + m;
+      if (dotList.some(d => inBox(d[0], d[1]))) return true;
+      for (const [a, b] of segList) {
+        for (let t = 0; t <= 1; t += 0.02) if (inBox(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)) return true;
+      }
+      const pts = [[x, y], [x - hw, y - hh], [x + hw, y - hh], [x - hw, y + hh], [x + hw, y + hh]];
+      return smallRings.some(rg => pts.some(([px, py]) => inRing(rg, px, py)));
+    };
+    // 겹치지 않으면 꼭짓점 평균 위치 그대로, 겹치면 자기 지역 안에서 가장 가까운 빈자리
+    const labelSpot = (f, name) => {
+      const [bx, by] = centroids[f.properties.name];
+      if (!labelHits(bx, by, name)) return [bx, by];
+      const ring = mainRing(f.geometry);
+      const hw = (name.length * LABEL_FONT) / 2 + 1, hh = LABEL_FONT / 2 + 0.6;
+      let best = [bx, by], bestD = Infinity;
+      for (let dx = -20; dx <= 20; dx += 0.5) for (let dy = -20; dy <= 20; dy += 0.5) {
+        const x = bx + dx, y = by + dy, d = Math.hypot(dx, dy);
+        if (d >= bestD) continue;
+        const corners = [[x, y], [x - hw, y - hh], [x + hw, y - hh], [x - hw, y + hh], [x + hw, y + hh]];
+        if (!corners.every(([px, py]) => inRing(ring, px, py))) continue;   // 자기 지역 밖으로 나가지 않게
+        if (labelHits(x, y, name)) continue;
+        best = [x, y]; bestD = d;
+      }
+      return best;
+    };
+
+    // 지역별 라벨 미세 조정 [오른쪽(+), 아래(+)] — 지도 단위(viewBox 폭 100 기준)
+    //   글자 상자가 자기 지역 밖(서울 등)으로 나가지 않는 값으로 확인한 것
+    const LABEL_NUDGE = { '경기': [3, 2] };
+
+    // 큰 지역: 지도 내부 라벨. 배경색이 진하면(t ≥ 0.6) 흰 글자 (seqInk), 연하면 검정
+    const bigLabels = gj.features
+      .filter(f => !SMALL_ALL.includes(f.properties.name))
+      .map(f => {
+        const name = MAP_NAME[f.properties.name];
+        if (!name) return '';
+        const r = regions.find(x => x.name === name);
+        const ink = r ? seqInk((valueOf(r) - mn) / (mx - mn || 1)) : 'var(--ink)';
+        const [sx, sy] = labelSpot(f, name);
+        const [nx, ny] = LABEL_NUDGE[name] || [0, 0];
+        const cx = sx + nx, cy = sy + ny;
+        return `<text x="${cx.toFixed(2)}" y="${cy.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-size="${LABEL_FONT}" font-weight="700" fill="${ink}" pointer-events="none">${name}</text>`;
+      }).join('');
+
+    // 플래그: 지도 바깥에 두고, 지역 안쪽 점과 짧은 선으로 연결
+    //   side='west' 면 anchorX 가 오른쪽 끝(이름표가 왼쪽으로), 'east' 면 anchorX 가 왼쪽 끝
+    const makeFlag = (rawName, side, anchorX, flagY) => {
+      const name = MAP_NAME[rawName];
+      const r = regions.find(x => x.name === name);
+      if (!name || !anchors[rawName] || !r) return '';
+      const [cx, cy] = anchors[rawName];
+      const w = name.length * FLAG_FONT + 3.6;
+      const rectX = side === 'west' ? anchorX - w : anchorX;
+      const isSel = String(r.id) === String(selected);
+      // 이름표(g.flag)는 클릭 가능 (지도 영역을 누른 것과 같음). 선·점은 클릭을 막지 않게 pointer-events 끔
+      return `<g class="flag${isSel ? ' is-selected' : ''}" data-id="${r.id}" role="button" tabindex="0" aria-label="${name} 선택">`
+        + `<line pointer-events="none" x1="${cx.toFixed(2)}" y1="${cy.toFixed(2)}" x2="${anchorX.toFixed(2)}" y2="${flagY.toFixed(2)}" stroke="#23251d" stroke-opacity="0.55" stroke-width="0.35"/>`
+        + `<circle pointer-events="none" cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="0.9" fill="#23251d" stroke="#fff" stroke-width="0.3"/>`
+        + `<rect x="${rectX.toFixed(2)}" y="${(flagY - FLAG_H / 2).toFixed(2)}" width="${w.toFixed(2)}" height="${FLAG_H}" rx="${FLAG_H / 2}" fill="#ffffff" stroke="#23251d" stroke-width="0.35"/>`
+        + `<text pointer-events="none" x="${(rectX + w / 2).toFixed(2)}" y="${(flagY + 0.3).toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-size="${FLAG_FONT}" font-weight="700" fill="#23251d">${name}</text></g>`;
+    };
+    const flagWest = westPlaced.map(p => makeFlag(p.n, 'west', -2, p.y)).join('');       // 서쪽(왼쪽 바깥)
+    const flagEast = eastPlaced.map(p => makeFlag(p.n, 'east', W + 2, p.y)).join('');    // 동쪽(오른쪽 바깥)
+
+    const regionLabels = bigLabels + flagWest + flagEast;
+
+    // viewBox 좌우 확장 (플래그 공간 확보, 지도 자체는 preserveAspectRatio 로 중앙 fit)
+    const PAD = 14;
+    el.innerHTML = `<svg class="kmap" viewBox="${-PAD} 0 ${W + PAD * 2} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${paths}${regionLabels}</svg>`
       + `<div class="scale"><span>${legendLabel}</span><span>적음</span><span class="steps">${SEQ.map(s => `<i style="background:var(${s})"></i>`).join('')}</span><span>많음</span></div>`;
 
     // 각 시도 영역 클릭 → 선택 지역 변경
+    //   이름표(.flag)도 같은 동작: 클릭, 또는 키보드 Enter / Space
     el.querySelectorAll('.prov').forEach(p => { p.onclick = () => onSelect(findRegion(p.dataset.id).id); });
+    el.querySelectorAll('.flag').forEach(g => {
+      const pick = () => onSelect(findRegion(g.dataset.id).id);
+      g.onclick = pick;
+      g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    });
   }
 
   // renderRegionInfo(el, r) : 선택한 지역의 이름과 배지 2개를 그림

@@ -35,3 +35,8 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### local-only override (집 작업용 DB 접속정보 등) ###
+src/main/resources/application-local.yaml
+src/main/resources/application-local.yml
+src/main/resources/application-local.properties
