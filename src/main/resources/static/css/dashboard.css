@@ -14,7 +14,6 @@
 /* 2칸 배치 (한 칸이 320px 보다 좁아지면 자동으로 아래로 내려감) */
 .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .grid-wide{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
-.grid-corr{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
 .grid-sim{display:grid;grid-template-columns:minmax(280px,320px) minmax(0,1fr);gap:16px;align-items:start}
 .region-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .region-name{display:flex;align-items:center;gap:10px;margin-top:2px;flex-wrap:wrap}
@@ -25,7 +24,7 @@
 .stat-row b{color:var(--ink);font-variant-numeric:tabular-nums}
 /* 화면 너비 1100px 이하에서는 전부 1단으로 */
 @media (max-width:1100px){
-  .grid-map,.grid-wide,.grid-corr,.grid-sim{grid-template-columns:minmax(0,1fr)}
+  .grid-map,.grid-wide,.grid-sim{grid-template-columns:minmax(0,1fr)}
   .map-card{position:static}
 }
 
@@ -44,17 +43,17 @@
 
 /* 페이지 맨 아래 데이터 안내 (기간, 기준 연도, 임시값 안내) */
 .data-note{margin:4px 0 0;font-size:12px;line-height:1.6;color:var(--mute)}
+/* 데이터 안내를 줄(li) 목록으로 */
+ul.data-note{padding-left:18px;list-style:disc}
+ul.data-note li+li{margin-top:2px}
 /* 막대 차트 아래 색 설명 */
 .bar-legend{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--mute)}
 .bar-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
 .bar-legend i:not(:first-child){margin-left:10px}
 .bar-legend i.legend-dot{border-radius:50%}
-/* 트리맵 색 기준 토글: 작은 안내 글자를 토글 위에 둠 (토글이 색만 바꾼다는 것을 알려줌) */
+/* 트리맵 색 기준 토글 (눈에 보이는 라벨은 없고 선택지 이름과 부제가 설명함) */
 .metric-switch{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .head-switches{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
-.metric-switch-label{font-size:12px;font-weight:500;color:var(--mute)}
-/* 카드 제목 줄 오른쪽에 배지를 여러 개 나란히 놓을 때 */
-.head-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 
 /* ===== Treemap ===== */
 /* 트리맵: 각 칸의 위치·크기(left/top/width/height)는 common.js 가 계산해서 style 로 넣음 */
@@ -65,8 +64,26 @@
 .tm-inner span{font-size:12px;font-weight:500;line-height:1.35;font-variant-numeric:tabular-nums;white-space:nowrap}   /* 줄 높이를 줄여 높이 50px 안팎의 칸에서도 두 줄이 넘치지 않게 */
 .tm-cell:hover .tm-inner,.tm-cell.is-linked .tm-inner,.tm-cell:focus-visible .tm-inner{outline:2px solid var(--ink);outline-offset:-2px}
 .tm-cell:focus{outline:none}
+/* KPI 카드를 누르면 해당 카드로 이동 (national.js 가 data-to 를 붙임). 도착한 카드가 상단 바에 가리지 않게 위 여백을 둠 */
+.kpi[data-to]{position:relative;cursor:pointer;transition:border-color .15s}
+/* 눌러서 이동한다는 단서: 오른쪽 위 작은 아래 화살표(연하게, 올리면 진해지며 살짝 내려감). 라벨 글자 끝과 카드 끝 사이가 가장 좁은 카드가 1280px 에서 27px 라 작게 둠. 둘째 content 는 화면 읽기 도구가 읽지 않게 하는 대체 글자(지원하지 않으면 첫째 값이 쓰임) */
+.kpi[data-to]::after{content:"↓";content:"↓" / "";position:absolute;top:13px;right:10px;font-size:13px;line-height:1;color:var(--ash);transition:color .15s,transform .15s}
+.kpi[data-to]:hover::after,.kpi[data-to]:focus-visible::after{color:var(--ink);transform:translateY(2px)}
+.kpi[data-to]:hover{border-color:var(--ash)}
+.kpi[data-to]:focus-visible{outline:2px solid var(--link-teal);outline-offset:2px}
+/* 큰 숫자와 증감 줄 높이를 카드마다 맞춤: 1번 카드(10,115 백만㎥)만 값 줄에 자리가 모자라 단위가 다음 줄로 내려가 아래 줄이 25px 어긋났음(1280px).
+   좌우 여백 20 → 16px 로 자리를 늘리고, 값 줄은 줄바꿈하지 않음. 공용 .kpi 는 건드리지 않고 이 페이지 카드(data-to)에만 적용 */
+.kpi[data-to]{padding-left:16px;padding-right:16px}
+.kpi[data-to] .kpi-value{flex-wrap:nowrap}
+/* 증감 줄: 증감 숫자는 항상 한 줄을 차지하고 설명은 그 아래로. 지금까지는 설명이 짧은 카드만 같은 줄에 놓여 폭에 따라 카드마다 모양이 달랐음(1280·1536px 은 6월 카드만, 1920px 은 12개월·6월 카드) */
+.kpi[data-to] .kpi-meta .delta{flex-basis:100%}
+.card[id]{scroll-margin-top:calc(var(--topbar-h) + 12px);outline:2px solid transparent;outline-offset:2px;transition:outline-color .5s}
+/* KPI 카드를 눌러 도착했을 때 잠깐 테두리를 보여 줌 (national.js 가 .is-arrived 를 켜고 1.5초 뒤 끔) */
+.card.is-arrived{outline-color:var(--link-teal)}
+@media (prefers-reduced-motion:reduce){.kpi[data-to],.kpi[data-to]::after,.card[id]{transition:none}}
 /* 데이터를 받아오는 동안 KPI 자리에 보이는 빈 카드 */
-.kpi-skeleton{min-height:96px;background:linear-gradient(90deg,var(--surface-soft) 25%,var(--hairline-soft) 50%,var(--surface-soft) 75%);background-size:200% 100%;animation:kpi-shimmer 1.2s linear infinite}
+/* KPI 빈 카드 높이: 실제 KPI 카드 높이(1280px 188 / 1536px 168 / 1920px 149)의 가운데 값 → 데이터가 들어올 때 아래 카드가 밀리는 폭을 20px 안쪽으로 (96px 일 때 약 90px 밀림) */
+.kpi-skeleton{min-height:168px;background:linear-gradient(90deg,var(--surface-soft) 25%,var(--hairline-soft) 50%,var(--surface-soft) 75%);background-size:200% 100%;animation:kpi-shimmer 1.2s linear infinite}
 @keyframes kpi-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.kpi-skeleton{animation:none}}
 /* 다른 차트의 같은 지역에 올렸을 때(지역 연동): 나머지 칸을 흐리게 */
@@ -84,21 +101,32 @@
 .tm-tip{position:absolute;display:none;z-index:5;pointer-events:none;padding:8px 10px;background:var(--surface-dark);color:var(--white);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);font-size:12px;line-height:1.6;white-space:nowrap;font-variant-numeric:tabular-nums}
 .tm-tip b{display:block;font-size:13px;margin-bottom:2px}
 /* 트리맵 색 범례 */
-/* 월별 곡선 범례: 연도 칩을 눌러 선을 켜고 끔 + 빠른 선택 (올해 vs 작년 / 전체) */
+/* 연도별 추이 카드: 왼쪽 차트 + 오른쪽 인사이트 (차트가 줄어들 수 있게 minmax(0,1fr)). 인사이트가 없으면 --solo 로 차트만 */
+.trend-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:32px;align-items:start}
+.trend-layout--solo{grid-template-columns:minmax(0,1fr)}
+.trend-aside .corr-insights{margin-top:0}
+@media (max-width:1100px){.trend-layout{grid-template-columns:minmax(0,1fr);gap:16px}}
+/* 월별 비교 조작(기준 해 / 비교 대상)과 범례 한 줄 */
+.trend-controls{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.trend-key{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:12px;color:var(--mute)}
+.trend-key-item{display:inline-flex;align-items:center;gap:6px}
+.trend-key-item i{display:inline-block;width:12px;height:10px;border-radius:2px}
+.trend-key-item i.is-line{width:16px;height:3px;border-radius:2px}
+.trend-key-item i.is-dot{width:10px;height:10px;border-radius:50%}
+.trend-key-item[data-hl]{cursor:default}
+.trend-key-item[data-hl]:hover{color:var(--ink);font-weight:600}
+.trend-key-hint{color:var(--ash)}
+/* 월별 비교: 범례 영역과 조작 줄 (기준 해 / 비교 대상) */
 .trend-legend{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-/* 빠른 보기 / 연도 선택: 라벨 + 버튼들 한 줄씩 (버튼이 많아 줄이 바뀌어도 라벨은 첫 줄 옆에 그대로) */
+/* 조작 한 줄: 라벨 + 버튼들 (버튼이 많아 줄이 바뀌어도 라벨은 첫 줄 옆에 그대로) */
 .trend-group{display:flex;align-items:flex-start;gap:10px}
 .trend-group-label{flex:none;width:56px;padding-top:7px;font-size:12px;color:var(--mute)}
 .trend-chips,.trend-quick{display:flex;flex-wrap:wrap;gap:8px}
 /* 버튼 크기: 페이지의 다른 토글(높이 약 35px, 글자 14px)과 비슷하게 (기존 높이 26px·글자 12px 은 월별 보기의 주 조작 요소로는 작았음) */
 .trend-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-card);color:var(--ink);font-size:13px;font-weight:500;line-height:1.5;cursor:pointer;transition:opacity var(--dur-fast),background var(--dur-fast)}
-.trend-chip i{display:inline-block;width:14px;height:4px;border-radius:2px}
 .trend-chip:hover{background:var(--surface-soft)}
-.trend-chip[data-y][aria-pressed="false"]{opacity:.5}
-.trend-chip[data-y][aria-pressed="false"] i{background:var(--ash)!important}
-/* 빠른 보기는 선택되면 진하게 채워 연도 버튼(테두리만 있음)과 구분 */
+/* 선택된 버튼은 진하게 채움 (기준 해 / 비교 대상) */
 .trend-chip--quick[aria-pressed="true"],.trend-chip--quick[aria-pressed="true"]:hover{background:var(--ink);border-color:var(--ink);color:var(--surface-card);font-weight:700}
-.trend-hint{flex-basis:100%;font-size:12px;color:var(--mute)}
 @media (prefers-reduced-motion:reduce){.trend-chip{transition:none}}
 .tm-legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--mute)}
 .tm-legend i{display:inline-block;width:28px;height:8px;border-radius:2px}
@@ -130,6 +158,9 @@
 .dl-row{display:grid;grid-template-columns:10px 1fr auto;column-gap:10px;align-items:center;padding:1px 8px;margin:0 -8px;border-radius:var(--radius-md);transition:background var(--dur-fast),opacity var(--dur-fast)}
 .dl-row b{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
 .dl-name small{display:block;font-size:12px;font-weight:400;color:var(--mute);line-height:1.3}
+/* 공급 비중 아래 작은 글씨 = 인구 비중 (공급 비중과 바로 비교). .dl-hidden = 화면 읽기 도구에만 읽히는 글자 */
+.dl-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.dl-row b small{display:block;font-size:12px;font-weight:400;color:var(--mute);line-height:1.3}
 .donut-legend.has-active .dl-row{opacity:.45}
 .donut-legend.has-active .dl-row.is-active{opacity:1;background:var(--surface-soft)}
 .dl-row.is-active span,.dl-row.is-active b{font-weight:700;color:var(--ink)}
@@ -141,9 +172,27 @@
 .corr-legend{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin-bottom:12px}
 .corr-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
 .corr-legend i:not(:first-child){margin-left:10px}
-.corr-row{padding:10px 0;border-top:1px solid var(--hairline-soft)}
+/* 요인 한 줄: 이름 | 막대 두 줄 | 오른쪽 한 줄 읽기 (3칸) */
+.corr-row{display:grid;grid-template-columns:96px minmax(0,1fr) 260px;column-gap:16px;align-items:center;padding:10px 0;border-top:1px solid var(--hairline-soft)}
 .corr-row:first-of-type{border-top:0}
-.corr-name{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.corr-row--axis{padding:2px 0 0;border-top:0}
+.corr-row--head{padding:0 0 6px;border-top:0;align-items:end}
+.corr-row--head .corr-legend{grid-column:1 / 3;margin:0}
+.corr-read-head{font-size:11px;line-height:1.4;color:var(--mute)}
+.corr-read-head b{display:block;font-size:12px;font-weight:600;color:var(--ink)}
+/* 설명 비율 막대: 전체가 100% (같은 달끼리 비교 막대와 같은 파랑) */
+.corr-meter{display:block;height:6px;margin-top:5px;background:var(--surface-soft);border-radius:3px;overflow:hidden}
+.corr-meter i{display:block;height:100%;background:var(--seq-4);border-radius:3px}
+.corr-name{font-size:13px;font-weight:600;color:var(--ink)}
+.corr-read{font-size:12px;line-height:1.5;color:var(--body)}
+.corr-read b{font-weight:600;color:var(--ink)}
+/* 막대 아래 인사이트 박스 (내용이 없으면 안 보임) */
+.corr-insights{margin-top:14px;padding:12px 14px;background:var(--blue-100);border-radius:var(--radius-md);font-size:13px;line-height:1.6;color:var(--ink)}
+.corr-insights:empty,.corr-insights[hidden]{display:none}
+.corr-insights p{position:relative;margin:0 0 6px;padding-left:12px}
+.corr-insights p:last-child{margin-bottom:0}
+.corr-insights b{font-weight:600}
+.corr-insights p::before{content:'';position:absolute;left:0;top:.7em;width:4px;height:4px;border-radius:50%;background:var(--blue-500)}
 .corr-name small{margin-left:6px;font-size:12px;font-weight:400;color:var(--mute)}
 .corr-bar{display:grid;grid-template-columns:56px 1fr 44px;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
 .corr-bar+.corr-bar{margin-top:4px}
@@ -166,6 +215,24 @@
 /* 호버한 칸의 상관 강도 안내 (높이 고정 → 글자가 바뀌어도 화면이 흔들리지 않음) */
 .hm-readout{margin-top:10px;padding-left:72px;min-height:20px;font-size:12px;color:var(--mute)}
 .hm-readout b{color:var(--ink);font-weight:700}
+/* 상관표 보기: 왼쪽에 표 두 개(각 340px 이하), 오른쪽에 읽는 법 패널 */
+.corr-table-layout{display:grid;grid-template-columns:auto minmax(260px,1fr);gap:40px;align-items:start}
+.hm-pair{display:grid;grid-template-columns:repeat(2,minmax(0,340px));gap:12px 28px}
+.hm-title{padding-left:72px;margin-bottom:6px;font-size:13px;font-weight:600;color:var(--ink)}
+.hm-pair .hm-cell,.hm-pair .hm-na{height:40px}
+/* 공급량 열(질문의 중심)을 강조 */
+.hm-col[data-c="0"]{font-weight:700;color:var(--ink)}
+.hm-cell[data-c="0"]{box-shadow:inset 0 0 0 1.5px rgba(35,37,29,.45)}
+/* 설명이 가리키는 칸: 점선 */
+.hm-flag{outline:2px dashed var(--ink);outline-offset:1px}
+.corr-aside-title{margin-bottom:8px;font-size:13px;font-weight:600;color:var(--ink)}
+#corrScale .hm-scale{flex-wrap:wrap;padding-left:0;margin-top:0}
+.corr-aside .corr-insights{margin-top:14px}
+/* 화면 너비 1100px 이하: 상관 행과 상관표 배치를 세로로 (위 일반 규칙보다 뒤에 있어야 적용됨) */
+@media (max-width:1100px){
+  .corr-row{grid-template-columns:minmax(0,1fr);row-gap:6px}
+  .corr-table-layout,.hm-pair{grid-template-columns:minmax(0,1fr)}
+}
 
 /* ===== Simulation preview ===== */
 /* 시뮬레이션 기온 미리보기 (12개월 막대) */
