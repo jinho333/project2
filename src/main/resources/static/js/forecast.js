@@ -145,8 +145,10 @@
           // split: common.js 에 만든 플러그인. 실적/예측 경계에 세로선 + 예측 구간 음영
           split: { index: n - 1, label: '예측' },
           // 툴팁에는 실적·예측만 표시(상한·하한 제외), 예측 구간이면 범위도 추가
+          //   마지막 실적 달(n-1)에는 예측 선이 '선 이어붙이기'용으로 실적값을 복사해 둔 것이라
+          //   거기서는 '예측' 줄을 숨김 → 실적 달에는 실적만, 예측 달부터 예측이 보임
           tooltip: {
-            filter: it => it.datasetIndex >= 2 && it.raw !== null,
+            filter: it => it.datasetIndex >= 2 && it.raw !== null && !(it.datasetIndex === 3 && it.dataIndex === n - 1),
             callbacks: {
               label: it => `${it.dataset.label} ${fmt(it.raw)} 백만㎥`,
               afterBody: it => { const k = it[0].dataIndex; return k >= n ? `범위 ${fmt(lo[k])}–${fmt(hi[k])}` : ''; }

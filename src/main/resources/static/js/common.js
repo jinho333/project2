@@ -311,6 +311,21 @@
     // 위에서 만든 플러그인 중 2개를 모든 차트에 등록
     //   → 옵션에 plugins: { refLine: {...} } 나 { split: {...} } 를 써야만 실제로 그려짐
     Chart.register(refLine, split);
+
+    // body 에 CSS zoom 이 걸려 있으면 Chart.js 는 마우스 위치를 잘못 읽어
+    //   예측 구간 등 차트 오른쪽에서 호버 반응이 안 되거나 엉뚱한 달의 툴팁이 뜬다.
+    //   _eventHandler 를 감싸서 clientX/Y 로 좌표를 다시 계산해 넘긴다 (zoom 이 1 이면 통과).
+    const _ehOrig = Chart.prototype._eventHandler;
+    Chart.prototype._eventHandler = function (e, replay) {
+      const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+      if (z !== 1 && e && e.native) {
+        const cv = this.canvas;
+        const rect = cv.getBoundingClientRect();
+        e.x = Math.round((e.native.clientX - rect.left) * (cv.width / rect.width));
+        e.y = Math.round((e.native.clientY - rect.top) * (cv.height / rect.height));
+      }
+      return _ehOrig.call(this, e, replay);
+    };
   }
 
   // hbar(canvas, data, 옵션) : 가로 막대 차트를 그림 (전국 페이지의 기온 민감도, 예측 정확도)
