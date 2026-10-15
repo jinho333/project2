@@ -54,8 +54,6 @@ ul.data-note li+li{margin-top:2px}
 /* 트리맵 색 기준 토글 (눈에 보이는 라벨은 없고 선택지 이름과 부제가 설명함) */
 .metric-switch{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .head-switches{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
-/* 카드 제목 줄 오른쪽에 배지를 여러 개 나란히 놓을 때 */
-.head-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 
 /* ===== Treemap ===== */
 /* 트리맵: 각 칸의 위치·크기(left/top/width/height)는 common.js 가 계산해서 style 로 넣음 */

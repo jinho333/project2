@@ -206,7 +206,7 @@
   const KPI_TARGET_NAMES = { trend: '연도별 추이', sens: '지역별 기온 민감도', acc: '지역별 예측 오차' };   // 마우스를 올렸을 때 목적지 안내(카드 제목은 보기에 따라 바뀌어 고정 글자를 씀)
   // 증감 방향 글자: 화살표 아이콘과 색만으로는 화면 읽기 도구가 방향을 알 수 없어서 숨은 글자(.dl-hidden)로 덧붙임
   const dirText = d => Number.isFinite(d) ? `<span class="dl-hidden">${d >= 0 ? '증가' : '감소'} </span>` : '';
-  const drawKpis = ({ national, avgSens, avgMape, overLimit, hasMape, hasSens }) => {
+  const drawKpis = ({ national, avgSens, avgMape, hasMape, hasSens }) => {
     const ytd = national.ytd;   // 진행 중인 연도가 있을 때만 (올해 누적)
     const latest = latestMonthOf(national.monthly);   // 월별 데이터가 없으면 null → 이 카드만 빠짐
     const r12 = rolling12Of(national.monthly);
@@ -218,8 +218,8 @@
       // 제목 앞 색 네모(accent)는 두지 않음: 5장 중 이 카드만 있어 이유 없이 눈에 띄고, 지역 페이지의 '겨울 비중' 카드 방식을 옮겨 온 것이라 이 페이지에는 맞지 않음
       // 민감도: 큰 숫자는 '%' 만(단위 %/°C 는 난해), 뜻은 보조 문구가 설명. 실제 기록으로 구한 값(요인 카드, 약 4%)과 계산 방식이 달라 '예측 모델 추정' 이라고 밝힘
       ['sens', D.kpi({ label: '전국 기온 민감도', value: hasSens ? fmt(avgSens, 1) : '–', unit: '%', caption: '기온이 1°C 낮아지면 한 달 평균 공급량이 이만큼 늘어남 (예측 모델 추정)' })],
-      // MAPE 는 비율이라 전분기와의 차이는 %p. 기준(MAPE_LIMIT)을 넘은 지역 수를 같은 카드에 함께 보여줌
-      ['acc', D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: hasMape ? `${dirText(national.mapeDelta)}전분기 대비 · 오차 큰 지역 ${overLimit.length}곳(${MAPE_LIMIT}% 이상)` : '전분기 대비', goodWhen: 'down' })]
+      // MAPE 는 비율이라 전분기와의 차이는 %p. (기준을 넘은 지역 수는 보여주지 않음: 예측 오차 카드의 범례와 빨간 막대가 이미 보여줌)
+      ['acc', D.kpi({ label: '예측 오차율 (MAPE)', value: hasMape ? fmt(avgMape, 1) : '–', unit: '%', delta: national.mapeDelta, deltaUnit: '%p', deltaLabel: `${dirText(national.mapeDelta)}전분기 대비`, goodWhen: 'down' })]
     ].filter(([, html]) => html);
     $('kpis').innerHTML = cards.map(([, html]) => html).join('');
     [...$('kpis').children].forEach((el, k) => {   // 카드를 누르거나 Enter 를 누르면 해당 카드로 부드럽게 이동 (동작 줄이기 설정이면 바로)
@@ -1006,10 +1006,8 @@
       { max: mapeAxisMax, ref: MAPE_LIMIT, refLabel: `기준 ${MAPE_LIMIT}%`, onClick: d => goToRegion(d.id), onHoverItem: d => setLinked(d ? d.id : null), showValue: true, axisTitle: '평균 오차율 (%)', barThickness: 16 }));
     setLinked = linkRegions([sensChart && { chart: sensChart, items: sensItems }, { chart: accChart, items: accItems }].filter(Boolean));
     $('accLegend').innerHTML = hasMape ? `<i style="background:${mapeOver}"></i>${MAPE_LIMIT}% 이상 (오차 큰 지역)<i style="background:${mapeOk}"></i>${MAPE_LIMIT}% 미만` : '';
-    $('badBadge').innerHTML = hasMape ? `<i class="dot"></i>오차 큰 지역 ${overLimit.length}곳` : '';
-    $('badBadge').hidden = !hasMape;
     // 설명 박스는 어떻게 구한 값인지와 한계만 알림 (민감도 카드의 '계산 방식' 박스와 같은 톤).
-    //   오차 큰 지역의 이름·개수는 배지, 범례, 빨간 막대, KPI 카드가 이미 보여줘서 박스에서는 반복하지 않음. 원인은 지역마다 다를 수 있어 단정하지 않음
+    //   오차 큰 지역은 범례와 빨간 막대가 이미 보여줘서(개수 배지와 KPI 보조 문구는 없앰) 박스에서는 반복하지 않음. 원인은 지역마다 다를 수 있어 단정하지 않음
     $('accCallout').innerHTML = hasMape
       ? insightBox(mapeInsightsOf(byMape, overLimit, avgMape))
       : D.callout('purple', '예측 오차를 불러오지 못했습니다', '파이썬 예측 서버(FastAPI)가 켜져 있는지 확인하세요.');
