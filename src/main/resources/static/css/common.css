@@ -27,7 +27,9 @@ button,input,select{font-family:inherit}
 
 /* ===== App shell ===== */
 /* 사이드바를 없애고 상단 바에 모든 네비게이션을 통합 - .app 은 단순 세로 흐름 */
-.app{min-height:100vh}
+/* body 에 zoom:1.15 가 걸려 있어서 100vh 를 그대로 쓰면 화면보다 1.15배 커진다.
+   → 줌 배율로 나눠 줘야 "딱 한 화면" 높이가 된다. (불필요한 세로 스크롤 방지) */
+.app{min-height:calc(100vh / 1.15)}
 /* [DEPRECATED] 사이드바 - 더 이상 쓰지 않음(혹시 호출돼도 안 보이게) */
 .sidebar{display:none}
 /* main 은 전체 폭 사용 */

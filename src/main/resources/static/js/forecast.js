@@ -116,10 +116,13 @@
     const lastYear = hist.slice(0, horizon).reduce((s, h) => s + h.value, 0);
     const end = fut[fut.length - 1];
 
+    // 인구 변화율: cumTrend 가 있으면 사용 ("horizon 뒤 예상 인구가 최근 달 대비 몇 %" → horizon 에 따라 값이 변함)
+    //           : 없으면 연 증감률(trend) 또는 지역 요약(r.trend)으로 폴백
+    const popTrend = (fc.cumTrend != null) ? fc.cumTrend : ((fc.trend != null) ? fc.trend : r.trend);
     $('fcKpis').innerHTML = [
       D.kpi({ label: `다음 달 예측 (${fut[0].label})`, value: fmt(fut[0].value), unit: '백만㎥', caption: `범위 ${fmt(fut[0].lo)}–${fmt(fut[0].hi)}` }),
       D.kpi({ label: `향후 ${horizon}개월 합계`, value: fmt(tot), unit: '백만㎥', delta: ((tot - lastYear) / lastYear) * 100, deltaLabel: '전년 동기 대비' }),
-      D.kpi({ label: '예측 입력', value: `${fmt(end.temp, 1)}°C`, caption: `${end.label} 평년 기온 · 인구 ${r.trend >= 0 ? '+' : ''}${r.trend}%/년`, accent: 'var(--season-winter)' })
+      D.kpi({ label: `예측에 사용된 ${end.label}월의 (기온)/(인구수 변화율)`, value: `${fmt(end.temp, 1)}°C / ${popTrend >= 0 ? '+' : ''}${popTrend.toFixed(2)}%`, caption: `${hist.at(-1).label} 기준 ${horizon}개월 뒤 예상 인구 변화율`, /* accent: 'var(--season-winter)' */ })
     ].join('');
     $('fcTitle').textContent = `${r.name} 공급량 예측`;
 
@@ -142,8 +145,10 @@
           // split: common.js 에 만든 플러그인. 실적/예측 경계에 세로선 + 예측 구간 음영
           split: { index: n - 1, label: '예측' },
           // 툴팁에는 실적·예측만 표시(상한·하한 제외), 예측 구간이면 범위도 추가
+          //   마지막 실적 달(n-1)에는 예측 선이 '선 이어붙이기'용으로 실적값을 복사해 둔 것이라
+          //   거기서는 '예측' 줄을 숨김 → 실적 달에는 실적만, 예측 달부터 예측이 보임
           tooltip: {
-            filter: it => it.datasetIndex >= 2 && it.raw !== null,
+            filter: it => it.datasetIndex >= 2 && it.raw !== null && !(it.datasetIndex === 3 && it.dataIndex === n - 1),
             callbacks: {
               label: it => `${it.dataset.label} ${fmt(it.raw)} 백만㎥`,
               afterBody: it => { const k = it[0].dataIndex; return k >= n ? `범위 ${fmt(lo[k])}–${fmt(hi[k])}` : ''; }
@@ -156,7 +161,8 @@
     // 월별 예측 표: 예측 배열 → <tr> 문자열로 만들어 한 번에 넣기
     $('fcTable').innerHTML = fut.map(f => {
       const s = D.season(f.m);
-      return `<tr><td class="strong">${f.label}</td><td>${fmt(f.temp, 1)}°C</td><td class="strong">${fmt(f.value)}</td><td class="muted">${fmt(f.lo)}</td><td class="muted">${fmt(f.hi)}</td><td><span class="badge badge--${SEASON_TONE[s]}">${D.SEASON_KO[s]}</span></td></tr>`;
+      // 컬럼 순서: 월 → 예측 공급량(중앙 정렬) → 하한 → 상한 → 예상 평균기온 → 계절
+      return `<tr><td class="strong">${f.label}</td><td class="strong" style="text-align:center">${fmt(f.value)}</td><td class="muted">${fmt(f.lo)}</td><td class="muted">${fmt(f.hi)}</td><td>${fmt(f.temp, 1)}°C</td><td style="text-align:center"><span class="badge badge--${SEASON_TONE[s]}">${D.SEASON_KO[s]}</span></td></tr>`;
     }).join('');
     D.icons();
   }

@@ -41,14 +41,14 @@
                         <!-- 예측 선 차트(#fcChart): 실적 12개월 + 예측. 오른쪽 위에 신뢰구간 스위치, 3·6개월 탭 -->
                         <section class="card">
                             <div class="card-head">
-                                <div><div class="eyebrow">Forecast</div><h3 class="card-title" id="fcTitle">공급량 예측</h3><div class="card-sub">실적 12개월 + 예측 · 단위: 백만㎥</div></div>
+                                <div><!-- <div class="eyebrow">Forecast</div> --><h3 class="card-title" id="fcTitle">공급량 예측</h3><div class="card-sub">실적 12개월 + 예측 · 단위: 백만㎥</div></div>
                                 <div class="card-actions">
                                     <label class="switch"><input type="checkbox" id="bandToggle" checked><span class="switch-track"></span>신뢰구간</label>
                                     <div id="horizonTabs" class="tabs"></div>
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div class="chart" style="height:300px"><canvas id="fcChart"></canvas></div>
+                                <div class="chart" style="height:270px"><canvas id="fcChart"></canvas></div>
                                 <div class="legend mt-12">
                                     <span><i class="ln" style="border-color:var(--viz-actual)"></i>실적</span>
                                     <span><i class="ln ln--dash" style="border-color:var(--viz-forecast)"></i>예측</span>
@@ -58,10 +58,10 @@
                         </section>
                         <!-- 월별 예측 표 (#fcTable 에 행을 채움) -->
                         <section class="card">
-                            <div class="card-head"><div><div class="eyebrow">Detail</div><h3 class="card-title">월별 예측 상세</h3><div class="card-sub">단위: 백만㎥, 하한~상한 = 예측 오차만큼의 범위</div></div></div>
+                            <div class="card-head"><div><!-- <div class="eyebrow">Detail</div> --><h3 class="card-title">월별 예측 상세</h3><div class="card-sub">단위: 백만㎥, 하한~상한 = 예측 오차만큼의 범위</div></div></div>
                             <div class="card-body card-body--flush">
                                 <table class="table">
-                                    <thead><tr><th>월</th><th>예상 평균기온</th><th>예측 공급량</th><th>하한</th><th>상한</th><th>계절</th></tr></thead>
+                                    <thead><tr><th>월</th><th style="font-weight:800;text-align:center">예측 공급량 <span style="color:#cd4239">*</span></th><th>하한</th><th>상한</th><th>예상 평균기온</th><th style="text-align:center">계절</th></tr></thead>
                                     <tbody id="fcTable"></tbody>
                                 </table>
                             </div>
@@ -72,7 +72,7 @@
                     <div id="simView" class="grid-sim" hidden>
                         <!-- 입력 카드: 기온 범위 슬라이더(최저/최고) + 인구 변화율 슬라이더 -->
                         <section class="card card--doc">
-                            <div class="card-head"><div><div class="eyebrow">Scenario</div><h3 class="card-title">시나리오 입력</h3></div></div>
+                            <div class="card-head"><div><!-- <div class="eyebrow">Scenario</div> --><h3 class="card-title">시나리오 입력</h3></div></div>
                             <div class="card-body stack-lg">
                                 <div class="field">
                                     <div class="field-head"><span>1년 기온 범위</span><b><span class="c-winter" id="tempLoLabel"></span> ~ <span class="c-summer" id="tempHiLabel"></span></b></div>
@@ -107,13 +107,14 @@
                             <div class="kpi-grid" id="simKpis"></div>
                             <section class="card">
                                 <div class="card-head">
-                                    <div><div class="eyebrow">Simulation</div><h3 class="card-title">기준 vs 시나리오 월별 공급량</h3><div class="card-sub">단위: 백만㎥</div></div>
+                                    <div><!-- <div class="eyebrow">Simulation</div> --><h3 class="card-title">기준 vs 시나리오 월별 공급량</h3><div class="card-sub">단위: 백만㎥</div></div>
                                     <div class="legend">
                                         <span><i class="ln ln--dash" style="border-color:var(--viz-forecast)"></i>기준(평년)</span>
                                         <span><i class="ln" style="border-color:var(--viz-scenario)"></i>시나리오</span>
                                     </div>
                                 </div>
-                                <div class="card-body"><div class="chart" style="height:280px"><canvas id="simChart"></canvas></div></div>
+                                <!-- 높이는 dashboard.css 의 .sim-chart 가 화면 크기에 맞춰 자동 계산 -->
+                                <div class="card-body"><div class="chart sim-chart"><canvas id="simChart"></canvas></div></div>
                             </section>
                             <div id="simCallout"></div>
                         </div>
