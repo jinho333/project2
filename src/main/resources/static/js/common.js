@@ -119,12 +119,14 @@
   // seqInk(t) : 위 배경색 위에 올릴 글자색. 배경이 진하면(t ≥ 0.6) 흰색, 연하면 검정
   const seqInk = t => (t >= 0.6 ? '#fff' : 'var(--ink)');
 
-  // divColor(v) : 상관계수(-1 ~ 1)를 색으로 바꿈 (상관계수 표의 칸 색)
-  //   -1 에 가까우면 진한 파랑, 0 은 흰색, +1 에 가까우면 진한 빨강 (7단계)
-  //   예) divColor(-1) → 'var(--div-neg-3)'     divColor(0) → 'var(--div-0)'     divColor(1) → 'var(--div-pos-3)'
-  //   계산: -1~1 을 0~6 번째로 바꿈 → (v + 1) / 2 × 6 을 반올림
-  const DIV = ['--div-neg-3', '--div-neg-2', '--div-neg-1', '--div-0', '--div-pos-1', '--div-pos-2', '--div-pos-3'];
-  const divColor = v => `var(${DIV[Math.round(((Math.max(-1, Math.min(1, v)) + 1) / 2) * 6)]})`;
+  // heatColor(v) : 상관계수의 크기(|r|)를 파랑 한 가지의 진하기로 바꿈 (상관계수 표의 칸 색)
+  //   방향(+/−)은 색이 아니라 숫자의 부호로 읽음. 여러 색을 섞으면 화면이 산만해 보여 한 색만 씀
+  //   단계: |r| 0.1 미만 / 0.3 미만 / 0.5 미만 / 0.7 미만 / 그 이상 (5단계)
+  //   --seq-4 는 흰 글자(3.8)도 먹색 글자(4.1)도 대비가 4.5 에 못 미쳐서 건너뜀
+  const HEAT = ['--seq-0', '--seq-1', '--seq-2', '--seq-3', '--seq-5'];
+  const heatStep = v => { const a = Math.abs(v); return a < 0.1 ? 0 : a < 0.3 ? 1 : a < 0.5 ? 2 : a < 0.7 ? 3 : 4; };
+  const heatColor = v => `var(${HEAT[heatStep(v)]})`;
+  const signedR = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2);   // +0.14 / −0.96
 
   // debounce(fn, ms) : fn 이 짧은 시간에 여러 번 불려도 "마지막 한 번만" 실행하게 만든 새 함수를 돌려줌
   //   쓰는 곳: 창 크기를 조절하는 동안 계속 다시 그리지 않고, 멈춘 뒤 ms 밀리초가 지나면 한 번만 그림
@@ -954,10 +956,12 @@
   //   labels : 변수 이름 배열              예) ['공급량', '평균기온', '난방도일', '인구', '세대수']
   //   M      : 상관계수 2차원 배열          M[r][c] = labels[r] 과 labels[c] 의 상관계수
   //   옵션 lower : true 면 아래쪽 삼각형만 그림
+  //   옵션 scale : false 면 표 아래 색 범례를 그리지 않음 (표를 여러 개 놓고 범례를 따로 둘 때)
+  //   옵션 hint  : false 면 마우스를 올렸을 때 나오는 설명 줄을 그리지 않음 (이름 굵게 표시는 그대로)
   //     (대각선은 자기 자신이라 항상 1.00 이고, 위쪽 삼각형은 아래쪽과 같은 값이라 생략)
-  //   칸 색은 divColor, 글자색은 아주 진한 칸(절댓값 0.83 이상)만 흰색
+  //   칸 색은 heatColor(상관의 크기를 파랑 한 가지의 진하기로), 글자색은 가장 진한 칸만 흰색. 방향은 숫자의 부호(+/−)로 읽음
   //   칸에 마우스를 올리면 그 행·열 이름이 굵어지고, 표 아래 한 줄에 '매우 강한 양의 상관' 같은 설명이 나옴
-  function renderHeatmap(el, labels, M, { lower = false } = {}) {
+  function renderHeatmap(el, labels, M, { lower = false, scale = true, hint = true } = {}) {
     const all = labels.map((_, i) => i);             // [0, 1, 2, ...]  변수 번호 목록 (_ 는 안 쓰는 값이라는 표시)
     // lower 면 행에서는 첫 변수를, 열에서는 마지막 변수를 뺌 (그 줄은 전부 빈칸이 되기 때문)
     const rowIdx = lower ? all.slice(1) : all;       // slice(1)     : 첫 번째를 뺀 나머지
@@ -984,14 +988,14 @@
           return;
         }
         // 칸 1개: 배경색은 값에 따라, 글자는 소수 2자리
-        h += `<div class="hm-cell" data-r="${r}" data-c="${c}" aria-label="${labels[r]} 와 ${labels[c]}: ${v.toFixed(2)}" style="background:${divColor(v)};color:${Math.abs(v) >= 0.83 ? '#fff' : 'var(--ink)'}">${v.toFixed(2)}</div>`;
+        h += `<div class="hm-cell" data-r="${r}" data-c="${c}" aria-label="${labels[r]} 와 ${labels[c]}: ${v.toFixed(2)}" style="background:${heatColor(v)};color:${heatStep(v) === 4 ? '#fff' : 'var(--ink)'}">${signedR(v)}</div>`;
       });
     });
     h += '</div>';
     // 표 아래 색 범례: −1 [색 7칸] +1
-    h += `<div class="hm-scale"><span>−1</span>${DIV.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>+1</span><span class="hm-scale-note">진할수록 강한 상관 · 빨강 = 같이 증가, 파랑 = 반대로 움직임</span></div>`;
+    if (scale) h += `<div class="hm-scale"><span>약함</span>${HEAT.map(d => `<i style="background:var(${d})"></i>`).join('')}<span>강함</span><span class="hm-scale-note">진할수록 강한 상관 · 방향은 숫자의 + / −</span></div>`;
     // 설명이 나올 한 줄 (처음에는 안내 문구)
-    h += `<div class="hm-readout">${HINT}</div>`;
+    if (hint) h += `<div class="hm-readout">${HINT}</div>`;
     el.innerHTML = h;
 
     const readout = el.querySelector('.hm-readout');
@@ -1007,12 +1011,12 @@
       // 마우스가 들어오면: 이름 굵게 + 아래 줄에 설명
       cell.onmouseenter = () => {
         mark(r, c, true);
-        readout.innerHTML = `<b>${labels[r]} ↔ ${labels[c]}</b> r = ${v.toFixed(2)} · ${corrStrength(v)}`;
+        if (readout) readout.innerHTML = `<b>${labels[r]} ↔ ${labels[c]}</b> r = ${v.toFixed(2)} · ${corrStrength(v)}`;
       };
       // 마우스가 나가면: 원래대로
       cell.onmouseleave = () => {
         mark(r, c, false);
-        readout.textContent = HINT;
+        if (readout) readout.textContent = HINT;
       };
     });
   }
@@ -1055,7 +1059,7 @@
   //   ※ 이 파일에 함수를 새로 만들었으면 여기에도 이름을 추가해야 다른 파일에서 보임
   //   { C, fmt } 는 { C: C, fmt: fmt } 를 줄여 쓴 것
   window.Dash = {
-    C, fmt, seq, seqInk, divColor, debounce, icons, hbar,
+    C, fmt, seq, seqInk, heatColor, debounce, icons, hbar,
     MONTHS, season, SEASON_KO, monthTemp,
     url, loadRegions, loadYears, getRegions, findRegion, getRegion, setRegion, showError, clearError,
     renderTileMap, renderRegionInfo, kpi, renderTabs, renderPills, callout, renderTreemap, renderHeatmap
