@@ -40,7 +40,6 @@ FastAPI는 **보조 서버**입니다. 지역 상세 · 전국 통계는 DB의 �
 - **없는 지역 번호 404 처리**: API 3개가 맨 처음에 `checkRegion()`을 호출합니다. FastAPI를 부르기 전에 확인해, 어차피 거절될 요청을 보내지 않습니다.
 - 비동기 응답 순서 문제 해결(요청 번호 `requestNo`로 옛 응답을 버림)
 
-지역 상세 · 전국 통계 페이지와 데이터 수집 · 전처리는 팀원이 맡았습니다.
 
 ## 예측 서버 (FastAPI) — [project2_python](https://github.com/jinho333/project2_python)
 
