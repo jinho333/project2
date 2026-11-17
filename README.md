@@ -1,7 +1,6 @@
 # 가스 공급량 수요 예측 모니터링 대시보드 (Spring Boot)
 
 도시가스 공급량이 **기온 · 인구**와 어떤 관계인지 분석해 **지역 상세 · 전국 통계 · 공급 예측** 화면으로 보여 주는 대시보드입니다. <br>
-그린AI캠퍼스 2차 팀 프로젝트(COMMIT, 3인 · 2026.09.18 ~ 10.16)이며, 저는 팀장이었습니다. <br>
 이 저장소는 **웹(Spring Boot)** 이고, 예측 서버(FastAPI) 코드는 [project2_python](https://github.com/jinho333/project2_python)에 있습니다. 예측 서버 설명은 이 README에 함께 적었습니다. 
 
 ![공급 예측 시연](docs/demo-forecast.gif)
