@@ -3,9 +3,11 @@
 도시가스 공급량이 **기온 · 인구**와 어떤 관계인지 분석해 **지역 상세 · 전국 통계 · 공급 예측** 화면으로 보여 주는 대시보드입니다. <br>
 이 저장소는 **웹(Spring Boot)** 이고, 예측 서버(FastAPI) 코드는 [project2_python](https://github.com/jinho333/project2_python)에 있습니다. 예측 서버 설명은 이 README에 함께 적었습니다. 
 
-![공급 예측 시연](docs/demo-forecast.gif)
+### 지역 상세 · 예측
 
-> 공급 예측 페이지: 지역을 고르면 다음 달 · 3·6개월 예측과 곡선, 조건을 바꿔 보는 시뮬레이션이 나옵니다.
+![지역 상세 · 예측 시연](docs/demo-forecast.gif)
+
+> 공급 예측 페이지: 지역을 고르면 다음 달 · 3·6개월 예측과 곡선, 예측 오차 범위가 나옵니다.
 
 ## 한눈에 보기
 
@@ -39,6 +41,12 @@ FastAPI는 **보조 서버**입니다. 지역 상세 · 전국 통계는 DB의 �
 - **없는 지역 번호 404 처리**: API 3개가 맨 처음에 `checkRegion()`을 호출합니다. FastAPI를 부르기 전에 확인해, 어차피 거절될 요청을 보내지 않습니다.
 - 비동기 응답 순서 문제 해결(요청 번호 `requestNo`로 옛 응답을 버림)
 
+
+### 예측 시뮬레이션
+
+![예측 시뮬레이션 시연](docs/demo-simulation.gif)
+
+> 시뮬레이션 탭: 기온과 인구 조건을 바꿔 보면 12개월 공급량이 다시 계산됩니다.
 
 ## 예측 서버 (FastAPI) — [project2_python](https://github.com/jinho333/project2_python)
 
