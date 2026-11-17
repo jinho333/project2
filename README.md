@@ -32,7 +32,7 @@ flowchart LR
 
 FastAPI는 **보조 서버**입니다. 지역 상세 · 전국 통계는 DB의 실제 값으로 그려, 예측 서버가 멈춰도 화면이 동작하도록 나눴습니다.
 
-## 제가 맡은 부분
+## 맡은 부분
 
 - EDA와 예측 모델링, 대구 오차 원인 분석(공급이 기온보다 한 달 늦게 반응 → 전월 기온 추가)
 - Python → MariaDB 적재 파이프라인(pymysql · SQLAlchemy)
@@ -66,42 +66,6 @@ FastAPI는 **보조 서버**입니다. 지역 상세 · 전국 통계는 DB의 �
 | [`train.py`](https://github.com/jinho333/project2_python/blob/dev/train.py) | 모델 학습 → `model/gas_models.pkl` 저장 |
 | [`main.py`](https://github.com/jinho333/project2_python/blob/dev/main.py) | 저장된 모델로 예측하는 FastAPI 서버, 예측 캐시 |
 
-## 핵심 코드
-
-| 주제 | 위치 |
-|---|---|
-| 공통 검증 `checkRegion()` | [`RegionService.java`](src/main/java/com/commit/project2/service/RegionService.java#L91) |
-| API 진입 시점 호출 | [`ForecastApiController.java`](src/main/java/com/commit/project2/controller/ForecastApiController.java#L24) |
-| 요청 번호로 옛 응답 버리기 | [`region.js`](src/main/resources/static/js/region.js#L105) |
-
-```java
-public void checkRegion(Long regionId) {
-  String name = regionMapper.getRegionName(regionId);   // 없는 번호면 null
-  if (name == null) {
-    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "없는 지역 번호입니다: " + regionId);
-  }
-}
-```
-
-
-
-## 실행
-
-1. MariaDB `project-2` 데이터베이스를 준비하고 [project2_python](https://github.com/jinho333/project2_python)의 CSV 데이터를 적재합니다. (스키마 SQL은 이 저장소에 없습니다.)
-2. 예측 서버를 먼저 실행합니다(기본 주소 `http://localhost:8000`, `application.yaml`의 `py.base.url`).
-
-```bash
-git clone https://github.com/jinho333/project2_python
-cd project2_python
-pip install fastapi uvicorn pandas scikit-learn joblib
-python train.py    # 처음 또는 모델을 바꿨을 때
-python main.py     # http://localhost:8000
-```
-3. `application.yaml`의 DB 접속 정보를 본인 환경에 맞게 고치고 실행합니다.
-
-```bash
-./gradlew bootRun
-```
 
 ## 기록
 
