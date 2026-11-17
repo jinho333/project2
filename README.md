@@ -17,6 +17,10 @@
 | 예측 속도 | 예측 결과를 캐시하고 서버 시작 시 3·6개월을 미리 계산 |
 | 데이터 | (17개 시도 + 전국) × 66개월 = 1,188행 (2021.01 ~ 2026.06) |
 
+## 기술 스택
+
+Java 17 · Spring Boot · MyBatis · Thymeleaf · MariaDB · JavaScript(axios) · Chart.js · RestClient
+
 ## 구조
 
 ```mermaid
@@ -80,9 +84,7 @@ public void checkRegion(Long regionId) {
 }
 ```
 
-## 기술 스택
 
-Java 17 · Spring Boot · MyBatis · Thymeleaf · MariaDB · JavaScript(axios) · Chart.js · RestClient · Gradle
 
 ## 실행
 
@@ -101,13 +103,6 @@ python main.py     # http://localhost:8000
 ```bash
 ./gradlew bootRun
 ```
-
-## 한계와 다음 단계
-
-- 예측 캐시는 서버 시작 시 채워집니다. 값을 바꿨을 때 재시작 없이 갱신하는 **갱신 정책**이 없습니다.
-- 404를 받은 화면이 "없는 지역"임을 알려 주지 않습니다.
-- 학습 데이터가 5~6년이라 해석에 한계가 있고, 울산은 10% 이상(10.1%)으로 남았습니다.
-- 울산 2026년 6월 값이 5월과 같아 이전 연도 평균(9,440.7㎥)으로 교정했습니다. 원본이 아닌 교정값입니다.
 
 ## 기록
 
